@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NutriTrack — Your Personal Nutrition Companion</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <script src="app.js" defer></script>
+</head>
+<body>
+
+<!-- ══ AUTH ══ -->
+<div id="auth-overlay">
+  <div class="auth-card">
+    <div class="auth-logo">
+      <div class="auth-logo-icon">🥗</div>
+      <div class="auth-logo-text">Nutri<span>Track</span></div>
+    </div>
+    <div class="auth-title">Welcome back</div>
+    <div class="auth-subtitle">Your personal nutrition companion</div>
+    <div class="auth-tabs">
+      <button class="auth-tab active" onclick="switchAuth('login')">Sign In</button>
+      <button class="auth-tab" onclick="switchAuth('register')">Register</button>
+    </div>
+    <div id="auth-error" class="auth-error"></div>
+    <div id="login-form">
+      <div class="form-group"><label>Username</label><input type="text" id="login-username" placeholder="Enter your username"></div>
+      <div class="form-group"><label>Password</label><input type="password" id="login-password" placeholder="Enter your password"></div>
+      <button class="btn-primary" onclick="handleLogin()">Sign In →</button>
+    </div>
+    <div id="register-form" style="display:none">
+      <div class="form-group"><label>Full Name</label><input type="text" id="reg-name" placeholder="Your full name"></div>
+      <div class="form-group"><label>Username</label><input type="text" id="reg-username" placeholder="Choose a username"></div>
+      <div class="form-group"><label>Password</label><input type="password" id="reg-password" placeholder="Minimum 6 characters"></div>
+      <button class="btn-primary" onclick="handleRegister()">Create Account →</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ APP ══ -->
+<div id="app">
+  <header>
+    <div class="header-logo">🥗 Nutri<span>Track</span></div>
+    <div class="header-user">
+      <div class="user-badge" id="user-badge">K</div>
+      <span class="username-display" id="username-display">User</span>
+      <button class="btn-logout" onclick="logout()">Sign Out</button>
+    </div>
+  </header>
+  <nav>
+    <button class="nav-tab active" onclick="switchPage('tracker')">🥘 Tracker</button>
+    <button class="nav-tab" onclick="switchPage('bmi')">📊 BMI</button>
+    <button class="nav-tab" onclick="switchPage('notes')">📝 Notes</button>
+  </nav>
+  <main>
+
+    <!-- TRACKER -->
+    <div id="page-tracker" class="page active">
+      <div class="page-header">
+        <div class="page-title">Food <em>Tracker</em></div>
+        <div class="page-desc">Tell me what you ate — I'll break down the complete nutrition profile.</div>
+      </div>
+
+      <div class="chat-container">
+        <div class="chat-messages" id="chat-messages">
+          <div class="msg ai">
+            <div class="msg-avatar">🥗</div>
+            <div class="msg-bubble">
+              Hello! I'm your nutrition assistant. Tell me what you ate — for example:<br><br>
+              <strong>"3 roti, 1 bowl dal, 100g rice and a banana"</strong><br><br>
+              I'll give you a complete breakdown of calories, protein, carbs, fat, and fibre.
+            </div>
+          </div>
+        </div>
+        <div class="chat-input-area">
+          <input class="chat-input" id="chat-input" type="text" placeholder="e.g. 3 roti, 150g rice, 1 bowl dal, 1 banana..."
+            onkeydown="if(event.key==='Enter') sendMessage()">
+          <button class="chat-send" id="send-btn" onclick="sendMessage()">↑</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- BMI -->
+    <div id="page-bmi" class="page">
+      <div class="page-header">
+        <div class="page-title">BMI & Calorie <em>Calculator</em></div>
+        <div class="page-desc">Know your BMI and daily calorie needs based on your body and lifestyle.</div>
+      </div>
+      <div class="bmi-grid">
+        <div class="calc-card">
+          <h3>Your Details</h3>
+          <div class="input-row">
+            <div class="input-group"><label>Age (years)</label><input type="number" id="bmi-age" placeholder="21" min="10" max="100"></div>
+            <div class="input-group"><label>Gender</label><select id="bmi-gender"><option value="male">Male</option><option value="female">Female</option></select></div>
+          </div>
+          <div class="input-row">
+            <div class="input-group"><label>Weight (kg)</label><input type="number" id="bmi-weight" placeholder="60"></div>
+            <div class="input-group"><label>Height (cm)</label><input type="number" id="bmi-height" placeholder="175"></div>
+          </div>
+          <div class="input-group" style="margin-bottom:14px">
+            <label>Activity Level</label>
+            <select id="bmi-activity">
+              <option value="1.2">Sedentary (no exercise)</option>
+              <option value="1.375">Lightly Active (1–3 days/week)</option>
+              <option value="1.55" selected>Moderately Active (3–5 days/week)</option>
+              <option value="1.725">Very Active (6–7 days/week)</option>
+              <option value="1.9">Extremely Active (athlete)</option>
+            </select>
+          </div>
+          <div class="input-group">
+            <label>Goal</label>
+            <select id="bmi-goal">
+              <option value="lose">Lose Weight (−500 kcal/day)</option>
+              <option value="maintain" selected>Maintain Weight</option>
+              <option value="gain">Gain Weight / Bulk (+300 kcal/day)</option>
+            </select>
+          </div>
+          <button class="btn-calc" onclick="calculateBMI()">Calculate →</button>
+        </div>
+        <div class="result-card" id="bmi-result">
+          <h3>Your Results</h3>
+          <div class="bmi-display">
+            <div class="bmi-number" id="bmi-value">—</div>
+            <div class="bmi-info">
+              <div class="bmi-category" id="bmi-cat">Enter your details</div>
+              <div style="font-size:13px;color:var(--text-muted);margin-top:4px" id="bmi-msg">to see results</div>
+            </div>
+          </div>
+          <div class="bmi-scale"><div class="bmi-marker" id="bmi-marker" style="left:50%"></div></div>
+          <div class="bmi-scale-labels">
+            <span>Underweight<br>&lt;18.5</span><span>Normal<br>18.5–25</span>
+            <span>Overweight<br>25–30</span><span>Obese<br>&gt;30</span>
+          </div>
+          <div class="stats-grid" style="margin-top:20px">
+            <div class="stat-box"><div class="stat-value" id="res-bmr">—</div><div class="stat-label">BMR (kcal/day)</div></div>
+            <div class="stat-box"><div class="stat-value" id="res-tdee">—</div><div class="stat-label">TDEE (kcal/day)</div></div>
+            <div class="stat-box"><div class="stat-value" id="res-target">—</div><div class="stat-label">Target Calories</div></div>
+            <div class="stat-box"><div class="stat-value" id="res-ibw">—</div><div class="stat-label">Ideal Weight (kg)</div></div>
+          </div>
+          <div class="calorie-breakdown">
+            <h4>RECOMMENDED MACRO SPLIT</h4>
+            <div class="macro-bars" id="macro-bars"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- NOTES -->
+    <div id="page-notes" class="page">
+      <div class="page-header">
+        <div class="page-title">Nutrition <em>Notes</em></div>
+        <div class="page-desc">Track your goals, meal plans, or anything about your nutrition journey.</div>
+      </div>
+      <div class="notes-toolbar">
+        <input class="notes-search" type="text" placeholder="Search notes..." oninput="renderNotes(this.value)">
+        <button class="btn-new-note" onclick="openNoteModal()">+ New Note</button>
+      </div>
+      <div id="notes-grid" class="notes-grid"></div>
+    </div>
+  </main>
+</div>
+
+<!-- NOTE MODAL -->
+<div class="modal-overlay" id="note-modal">
+  <div class="note-modal">
+    <div class="modal-header">
+      <h3 id="modal-title">New Note</h3>
+      <button class="modal-close" onclick="closeNoteModal()">×</button>
+    </div>
+    <input class="note-title-input" id="note-title" placeholder="Note title...">
+    <textarea class="note-content-input" id="note-content" placeholder="Write anything — meal plans, goals, cheat days, progress..."></textarea>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="closeNoteModal()">Cancel</button>
+      <button class="btn-save" onclick="saveNote()">Save Note</button>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

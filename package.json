@@ -1,0 +1,11 @@
+{
+  "name": "nutritrack",
+  "version": "1.0.0",
+  "description": "NutriTrack - Personal Nutrition Companion",
+  "scripts": {
+    "dev": "netlify dev"
+  },
+  "devDependencies": {
+    "netlify-cli": "^17.20.0"
+  }
+}
