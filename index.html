@@ -49,14 +49,134 @@
     </div>
   </header>
   <nav>
-    <button class="nav-tab active" onclick="switchPage('tracker')">🥘 Tracker</button>
+    <button class="nav-tab active" onclick="switchPage('dashboard')">📈 Dashboard</button>
+    <button class="nav-tab" onclick="switchPage('tracker')">🥘 Tracker</button>
     <button class="nav-tab" onclick="switchPage('bmi')">📊 BMI</button>
     <button class="nav-tab" onclick="switchPage('notes')">📝 Notes</button>
+    <button class="nav-tab" onclick="switchPage('settings')">⚙️ Settings</button>
   </nav>
   <main>
 
+    <!-- DASHBOARD -->
+    <div id="page-dashboard" class="page active">
+      <div class="page-header">
+        <div class="page-title">Welcome Back, <span id="dash-user-name">User</span>!</div>
+        <div class="page-desc">Here is your daily nutrition and fitness progress summary.</div>
+      </div>
+      
+      <div class="dashboard-grid">
+        <!-- Calorie Ring Progress -->
+        <div class="dash-card calories-card">
+          <h3>Daily Energy Progress</h3>
+          <div class="calories-ring-container">
+            <svg class="progress-ring" width="160" height="160">
+              <circle class="progress-ring__circle-bg" stroke="var(--sage-pale)" stroke-width="12" fill="transparent" r="66" cx="80" cy="80" />
+              <circle class="progress-ring__circle" stroke="var(--sage)" stroke-width="12" fill="transparent" r="66" cx="80" cy="80" stroke-linecap="round" />
+            </svg>
+            <div class="ring-label">
+              <span class="value" id="dash-cal-completed">0</span>
+              <span class="sub">of <span id="dash-cal-target">0</span> kcal</span>
+            </div>
+          </div>
+          <div class="calorie-remaining" id="dash-cal-remaining">—</div>
+        </div>
+
+        <!-- Macros Progress Card -->
+        <div class="dash-card macros-card">
+          <h3>Macros Breakdown</h3>
+          <div class="dash-macro-list">
+            <div class="dash-macro-item">
+              <div class="label-row">
+                <span class="name">Protein</span>
+                <span class="val"><span id="dash-p-completed">0</span>g / <span id="dash-p-target">0</span>g</span>
+              </div>
+              <div class="progress-track"><div class="progress-fill protein-fill" id="dash-p-fill" style="width: 0%"></div></div>
+              <span class="left-label" id="dash-p-left">0g left</span>
+            </div>
+            
+            <div class="dash-macro-item">
+              <div class="label-row">
+                <span class="name">Carbs</span>
+                <span class="val"><span id="dash-c-completed">0</span>g / <span id="dash-c-target">0</span>g</span>
+              </div>
+              <div class="progress-track"><div class="progress-fill carbs-fill" id="dash-c-fill" style="width: 0%"></div></div>
+              <span class="left-label" id="dash-c-left">0g left</span>
+            </div>
+            
+            <div class="dash-macro-item">
+              <div class="label-row">
+                <span class="name">Fat</span>
+                <span class="val"><span id="dash-f-completed">0</span>g / <span id="dash-f-target">0</span>g</span>
+              </div>
+              <div class="progress-track"><div class="progress-fill fat-fill" id="dash-f-fill" style="width: 0%"></div></div>
+              <span class="left-label" id="dash-f-left">0g left</span>
+            </div>
+
+            <div class="dash-macro-item">
+              <div class="label-row">
+                <span class="name">Fiber</span>
+                <span class="val"><span id="dash-fi-completed">0</span>g / <span id="dash-fi-target">0</span>g</span>
+              </div>
+              <div class="progress-track"><div class="progress-fill fiber-fill" id="dash-fi-fill" style="width: 0%"></div></div>
+              <span class="left-label" id="dash-fi-left">0g left</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Weight Tracking Card -->
+        <div class="dash-card weight-card">
+          <h3>Weight Progress</h3>
+          <div class="weight-progress-display">
+            <div class="weight-stat">
+              <span class="num" id="dash-weight-start">—</span>
+              <span class="lbl">Start</span>
+            </div>
+            <div class="weight-stat current">
+              <span class="num" id="dash-weight-current">—</span>
+              <span class="lbl">Current</span>
+            </div>
+            <div class="weight-stat target">
+              <span class="num" id="dash-weight-target">—</span>
+              <span class="lbl">Target</span>
+            </div>
+          </div>
+          <div class="weight-gauge-container">
+            <div class="weight-gauge-track"><div class="weight-gauge-fill" id="dash-weight-fill" style="width: 0%"></div></div>
+            <div class="weight-progress-message" id="dash-weight-msg">Log weight updates to track progress.</div>
+          </div>
+          <button class="btn-calc" style="margin-top: 14px; padding: 10px;" onclick="openWeightModal()">Log Weight Update</button>
+          
+          <div class="weight-history-section">
+            <h4>History</h4>
+            <div class="weight-history-timeline" id="dash-weight-history">
+              <div class="empty-timeline">No history recorded yet</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Infographic of the Month Card -->
+        <div class="dash-card infographic-card">
+          <h3>Monthly Infographic</h3>
+          <p class="section-subtitle">Visual grid of daily calorie intake consistency</p>
+          <div class="infographic-header">
+            <span id="infographic-month-year">—</span>
+            <div class="infographic-legend">
+              <span class="legend-item"><span class="legend-color empty"></span> 0%</span>
+              <span class="legend-item"><span class="legend-color low"></span> &lt;50%</span>
+              <span class="legend-item"><span class="legend-color mid"></span> 50-85%</span>
+              <span class="legend-item"><span class="legend-color goal"></span> 85-110%</span>
+              <span class="legend-item"><span class="legend-color surplus"></span> &gt;110%</span>
+            </div>
+          </div>
+          <div class="infographic-grid" id="infographic-grid">
+            <!-- Dynamically populated month grids -->
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- TRACKER -->
-    <div id="page-tracker" class="page active">
+    <div id="page-tracker" class="page">
       <div class="page-header">
         <div class="page-title">Food <em>Tracker</em></div>
         <div class="page-desc">Tell me what you ate — I'll break down the complete nutrition profile.</div>
@@ -158,6 +278,64 @@
       </div>
       <div id="notes-grid" class="notes-grid"></div>
     </div>
+
+    <!-- SETTINGS -->
+    <div id="page-settings" class="page">
+      <div class="page-header">
+        <div class="page-title">App <em>Settings</em></div>
+        <div class="page-desc">Tweak your profile parameters, targets, and goals.</div>
+      </div>
+      <div class="settings-grid">
+        <div class="settings-card">
+          <h3>Profile Parameters</h3>
+          <div class="form-row">
+            <div class="form-group"><label>Gender</label><select id="set-gender"><option value="male">Male</option><option value="female">Female</option></select></div>
+            <div class="form-group"><label>Date of Birth</label><input type="date" id="set-dob"></div>
+          </div>
+          <div class="form-row">
+            <div class="form-group"><label>Height (cm)</label><input type="number" id="set-height" placeholder="175"></div>
+            <div class="form-group"><label>Current Weight (kg)</label><input type="number" id="set-weight" placeholder="70"></div>
+          </div>
+          <div class="form-row">
+            <div class="form-group"><label>Target Weight (kg)</label><input type="number" id="set-target-weight" placeholder="65"></div>
+            <div class="form-group">
+              <label>Activity Level</label>
+              <select id="set-activity">
+                <option value="1.2">Sedentary (no exercise)</option>
+                <option value="1.375">Lightly Active (1–3 days/week)</option>
+                <option value="1.55">Moderately Active (3–5 days/week)</option>
+                <option value="1.725">Very Active (6–7 days/week)</option>
+                <option value="1.9">Extremely Active (athlete)</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group" style="margin-bottom: 20px;">
+            <label>Weight Goal</label>
+            <select id="set-goal">
+              <option value="lose">Lose Weight (−500 kcal/day)</option>
+              <option value="maintain">Maintain Weight</option>
+              <option value="gain">Gain Weight (+300 kcal/day)</option>
+            </select>
+          </div>
+          <button class="btn-primary" onclick="saveProfileSettings()">Save Profile & Recalculate Goals</button>
+        </div>
+
+        <div class="settings-card">
+          <h3>Manual Goal Overrides</h3>
+          <p class="section-subtitle" style="margin-bottom: 12px; font-size: 13px; color: var(--text-muted);">Override calculated limits if you prefer customized daily targets.</p>
+          <div class="form-group"><label>Target Calories (kcal)</label><input type="number" id="override-calories" placeholder="e.g. 2000"></div>
+          <div class="form-row">
+            <div class="form-group"><label>Protein Target (g)</label><input type="number" id="override-protein" placeholder="e.g. 120"></div>
+            <div class="form-group"><label>Carbs Target (g)</label><input type="number" id="override-carbs" placeholder="e.g. 250"></div>
+          </div>
+          <div class="form-row">
+            <div class="form-group"><label>Fat Target (g)</label><input type="number" id="override-fat" placeholder="e.g. 60"></div>
+            <div class="form-group"><label>Fiber Target (g)</label><input type="number" id="override-fiber" placeholder="e.g. 30"></div>
+          </div>
+          <button class="btn-primary" onclick="saveManualOverrides()">Save Custom Targets</button>
+        </div>
+      </div>
+    </div>
   </main>
 </div>
 
@@ -173,6 +351,70 @@
     <div class="modal-footer">
       <button class="btn-secondary" onclick="closeNoteModal()">Cancel</button>
       <button class="btn-save" onclick="saveNote()">Save Note</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ ONBOARDING OVERLAY ══ -->
+<div class="modal-overlay" id="onboarding-overlay">
+  <div class="note-modal onboarding-card" style="max-width: 480px;">
+    <div class="modal-header">
+      <h3>Let's Set Up Your Profile</h3>
+    </div>
+    <p class="section-subtitle" style="margin-bottom: 20px; font-size: 13px; color: var(--text-muted);">We need a few details to personalize your calorie and nutrition targets.</p>
+    <div id="onboarding-error" class="auth-error" style="margin-bottom: 16px;"></div>
+    
+    <div class="form-row">
+      <div class="form-group"><label>Gender</label><select id="onboard-gender"><option value="male">Male</option><option value="female">Female</option></select></div>
+      <div class="form-group"><label>Date of Birth</label><input type="date" id="onboard-dob" required></div>
+    </div>
+    
+    <div class="form-row">
+      <div class="form-group"><label>Height (cm)</label><input type="number" id="onboard-height" placeholder="e.g. 170" required></div>
+      <div class="form-group"><label>Current Weight (kg)</label><input type="number" id="onboard-weight" placeholder="e.g. 65" required></div>
+    </div>
+    
+    <div class="form-row">
+      <div class="form-group"><label>Target Weight (kg)</label><input type="number" id="onboard-target-weight" placeholder="e.g. 60" required></div>
+      <div class="form-group">
+        <label>Activity Level</label>
+        <select id="onboard-activity">
+          <option value="1.2">Sedentary (no exercise)</option>
+          <option value="1.375">Lightly Active (1–3 days/week)</option>
+          <option value="1.55" selected>Moderately Active (3–5 days/week)</option>
+          <option value="1.725">Very Active (6–7 days/week)</option>
+          <option value="1.9">Extremely Active (athlete)</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="form-group" style="margin-bottom: 24px;">
+      <label>Weight Goal</label>
+      <select id="onboard-goal">
+        <option value="lose">Lose Weight (−500 kcal/day)</option>
+        <option value="maintain" selected>Maintain Weight</option>
+        <option value="gain">Gain Weight (+300 kcal/day)</option>
+      </select>
+    </div>
+    
+    <button class="btn-primary" onclick="submitOnboarding()">Set Up My Targets →</button>
+  </div>
+</div>
+
+<!-- ══ LOG WEIGHT MODAL ══ -->
+<div class="modal-overlay" id="weight-modal">
+  <div class="note-modal" style="max-width: 380px;">
+    <div class="modal-header">
+      <h3>Update Weight</h3>
+      <button class="modal-close" onclick="closeWeightModal()">×</button>
+    </div>
+    <div class="form-group" style="margin-bottom: 20px;">
+      <label>Current Weight (kg)</label>
+      <input type="number" step="0.1" id="log-weight-input" placeholder="e.g. 68.5">
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="closeWeightModal()">Cancel</button>
+      <button class="btn-save" onclick="saveWeeklyWeight()">Save Weight</button>
     </div>
   </div>
 </div>

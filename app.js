@@ -101,6 +101,9 @@ function loginSuccess(username,name) {
   notesCache = [];
   renderNotes();
   syncNotesFromDB();
+  
+  // Programmatically switch to Dashboard by default on login
+  switchPage('dashboard');
 }
 function logout() {
   currentUser=null;
@@ -125,8 +128,16 @@ function switchPage(page) {
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.nav-tab').forEach(t=>t.classList.remove('active'));
   document.getElementById('page-'+page).classList.add('active');
-  document.querySelectorAll('.nav-tab')[['tracker','bmi','notes'].indexOf(page)].classList.add('active');
+  
+  const tabs = ['dashboard', 'tracker', 'bmi', 'notes', 'settings'];
+  const idx = tabs.indexOf(page);
+  if (idx !== -1) {
+    document.querySelectorAll('.nav-tab')[idx].classList.add('active');
+  }
+  
   if(page==='notes') renderNotes();
+  if(page==='dashboard') renderDashboard();
+  if(page==='settings') renderSettings();
 }
 
 // ══ GEMINI CHAT ══
@@ -164,6 +175,7 @@ async function sendMessage() {
     try {
       const parsed=JSON.parse(raw.replace(/```json|```/g,'').trim());
       appendNutritionTable(parsed);
+      logDailyMeal(parsed);
     } catch {
       appendMsg('ai', raw||'Sorry, I had trouble analyzing that. Please describe your food more clearly.');
     }
@@ -328,3 +340,442 @@ async function deleteNote(e,id){
   }
 }
 document.getElementById('note-modal').addEventListener('click',function(e){if(e.target===this)closeNoteModal();});
+
+// ══ ONBOARDING, LOGGING, SETTINGS & DASHBOARD ══
+
+function calculateAge(dobString) {
+  const today = new Date();
+  const birthDate = new Date(dobString);
+  let age = today.getFullYear() - birthDate.getFullYear();
+  const m = today.getMonth() - birthDate.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+    age--;
+  }
+  return age;
+}
+
+function submitOnboarding() {
+  const gender = document.getElementById('onboard-gender').value;
+  const dob = document.getElementById('onboard-dob').value;
+  const height = +document.getElementById('onboard-height').value;
+  const weight = +document.getElementById('onboard-weight').value;
+  const targetWeight = +document.getElementById('onboard-target-weight').value;
+  const activity = +document.getElementById('onboard-activity').value;
+  const goal = document.getElementById('onboard-goal').value;
+
+  if (!dob || !height || !weight || !targetWeight) {
+    const err = document.getElementById('onboarding-error');
+    err.textContent = 'Please fill in all fields.';
+    err.style.display = 'block';
+    return;
+  }
+
+  const age = calculateAge(dob);
+  let bmr = gender === 'male' 
+    ? (10 * weight + 6.25 * height - 5 * age + 5)
+    : (10 * weight + 6.25 * height - 5 * age - 161);
+  
+  const tdee = Math.round(bmr * activity);
+  let targetCalories = tdee;
+  if (goal === 'lose') targetCalories = Math.max(tdee - 500, 1200);
+  else if (goal === 'gain') targetCalories = tdee + 300;
+
+  const protein = Math.round((targetCalories * 0.25) / 4);
+  const carbs = Math.round((targetCalories * 0.50) / 4);
+  const fat = Math.round((targetCalories * 0.25) / 9);
+  const fiber = gender === 'male' ? 38 : 25;
+
+  const profile = {
+    gender,
+    dob,
+    height,
+    startingWeight: weight,
+    currentWeight: weight,
+    targetWeight,
+    activity,
+    goal,
+    targetCalories,
+    targetProtein: protein,
+    targetCarbs: carbs,
+    targetFat: fat,
+    targetFiber: fiber,
+    setupComplete: true
+  };
+
+  localStorage.setItem('nt_profile_' + currentUser, JSON.stringify(profile));
+  
+  const weightHistory = [{ date: new Date().toLocaleDateString('en-CA'), weight }];
+  localStorage.setItem('nt_weight_history_' + currentUser, JSON.stringify(weightHistory));
+
+  document.getElementById('onboarding-overlay').style.display = 'none';
+  switchPage('dashboard');
+}
+
+function renderDashboard() {
+  if (!currentUser) return;
+  
+  const profileJson = localStorage.getItem('nt_profile_' + currentUser);
+  if (!profileJson) {
+    document.getElementById('onboarding-overlay').style.display = 'flex';
+    document.getElementById('onboarding-error').style.display = 'none';
+    return;
+  }
+  
+  const profile = JSON.parse(profileJson);
+  document.getElementById('dash-user-name').textContent = sessionStorage.getItem('nt_session_name') || currentUser;
+  
+  const logs = JSON.parse(localStorage.getItem('nt_logs_' + currentUser) || '{}');
+  const todayStr = new Date().toLocaleDateString('en-CA');
+  const todayLog = logs[todayStr] || { totals: { calories: 0, protein: 0, carbs: 0, fat: 0, fibre: 0 } };
+  
+  const completedCal = Math.round(todayLog.totals.calories || 0);
+  const targetCal = Math.round(profile.targetCalories || 2000);
+  document.getElementById('dash-cal-completed').textContent = completedCal;
+  document.getElementById('dash-cal-target').textContent = targetCal;
+  
+  const calRemaining = targetCal - completedCal;
+  const remText = calRemaining > 0 
+    ? `${calRemaining} kcal left` 
+    : `${Math.abs(calRemaining)} kcal surplus`;
+  document.getElementById('dash-cal-remaining').textContent = remText;
+  
+  const circle = document.querySelector('.progress-ring__circle');
+  if (circle) {
+    const radius = circle.r.baseVal.value;
+    const circumference = radius * 2 * Math.PI;
+    circle.style.strokeDasharray = `${circumference} ${circumference}`;
+    const pct = Math.min((completedCal / targetCal) * 100, 100);
+    const offset = circumference - (pct / 100) * circumference;
+    circle.style.strokeDashoffset = offset;
+  }
+  
+  const macros = [
+    { key: 'p', completed: todayLog.totals.protein || 0, target: profile.targetProtein || 120, fillId: 'dash-p-fill', leftId: 'dash-p-left', compId: 'dash-p-completed', targId: 'dash-p-target' },
+    { key: 'c', completed: todayLog.totals.carbs || 0, target: profile.targetCarbs || 250, fillId: 'dash-c-fill', leftId: 'dash-c-left', compId: 'dash-c-completed', targId: 'dash-c-target' },
+    { key: 'f', completed: todayLog.totals.fat || 0, target: profile.targetFat || 65, fillId: 'dash-f-fill', leftId: 'dash-f-left', compId: 'dash-f-completed', targId: 'dash-f-target' },
+    { key: 'fi', completed: todayLog.totals.fibre || 0, target: profile.targetFiber || 30, fillId: 'dash-fi-fill', leftId: 'dash-fi-left', compId: 'dash-fi-completed', targId: 'dash-fi-target' }
+  ];
+  
+  macros.forEach(m => {
+    const comp = m.completed;
+    const targ = m.target;
+    document.getElementById(m.compId).textContent = Number(comp).toFixed(1);
+    document.getElementById(m.targId).textContent = Math.round(targ);
+    
+    const fill = document.getElementById(m.fillId);
+    const pct = Math.min((comp / targ) * 100, 100);
+    fill.style.width = pct + '%';
+    
+    const left = targ - comp;
+    const leftText = left > 0 ? `${left.toFixed(1)}g left` : `${Math.abs(left).toFixed(1)}g over`;
+    document.getElementById(m.leftId).textContent = leftText;
+  });
+
+  renderWeightProgress(profile);
+  renderInfographic(logs, targetCal);
+}
+
+function logDailyMeal(parsed) {
+  if (!currentUser) return;
+  const todayStr = new Date().toLocaleDateString('en-CA');
+  const logs = JSON.parse(localStorage.getItem('nt_logs_' + currentUser) || '{}');
+  
+  if (!logs[todayStr]) {
+    logs[todayStr] = {
+      totals: { calories: 0, protein: 0, carbs: 0, fat: 0, fibre: 0 },
+      entries: []
+    };
+  }
+  
+  const dayLog = logs[todayStr];
+  
+  parsed.items.forEach(item => {
+    dayLog.entries.push({
+      time: new Date().toLocaleTimeString('en-US', { hour12: false }),
+      food: item.food,
+      amount: item.amount,
+      calories: item.calories,
+      protein: item.protein,
+      carbs: item.carbs,
+      fat: item.fat,
+      fibre: item.fibre
+    });
+  });
+  
+  dayLog.totals.calories += parsed.totals.calories || 0;
+  dayLog.totals.protein += parsed.totals.protein || 0;
+  dayLog.totals.carbs += parsed.totals.carbs || 0;
+  dayLog.totals.fat += parsed.totals.fat || 0;
+  dayLog.totals.fibre += parsed.totals.fibre || 0;
+  
+  localStorage.setItem('nt_logs_' + currentUser, JSON.stringify(logs));
+  
+  if (document.getElementById('page-dashboard').classList.contains('active')) {
+    renderDashboard();
+  }
+}
+
+function renderWeightProgress(profile) {
+  const startingWeight = profile.startingWeight || 70;
+  const currentWeight = profile.currentWeight || 70;
+  const targetWeight = profile.targetWeight || 65;
+  
+  document.getElementById('dash-weight-start').textContent = startingWeight.toFixed(1) + ' kg';
+  document.getElementById('dash-weight-current').textContent = currentWeight.toFixed(1) + ' kg';
+  document.getElementById('dash-weight-target').textContent = targetWeight.toFixed(1) + ' kg';
+  
+  let pct = 0;
+  const totalDiff = startingWeight - targetWeight;
+  if (totalDiff === 0) {
+    pct = 100;
+  } else {
+    const currentDiff = startingWeight - currentWeight;
+    pct = Math.min(Math.max((currentDiff / totalDiff) * 100, 0), 100);
+  }
+  
+  document.getElementById('dash-weight-fill').style.width = pct + '%';
+  
+  let msg = '';
+  if (currentWeight === targetWeight) {
+    msg = '🎉 Goal reached! Excellent work maintaining your target weight.';
+  } else if (totalDiff > 0) {
+    const left = currentWeight - targetWeight;
+    if (left > 0) {
+      msg = `You are ${pct.toFixed(0)}% of the way there! ${left.toFixed(1)} kg left to lose.`;
+    } else {
+      msg = `You exceeded your weight loss target by ${Math.abs(left).toFixed(1)} kg!`;
+    }
+  } else {
+    const left = targetWeight - currentWeight;
+    if (left > 0) {
+      msg = `You are ${pct.toFixed(0)}% of the way there! ${left.toFixed(1)} kg left to gain.`;
+    } else {
+      msg = `You exceeded your weight gain target by ${Math.abs(left).toFixed(1)} kg!`;
+    }
+  }
+  document.getElementById('dash-weight-msg').textContent = msg;
+  
+  const history = JSON.parse(localStorage.getItem('nt_weight_history_' + currentUser) || '[]');
+  const historyContainer = document.getElementById('dash-weight-history');
+  if (history.length === 0) {
+    historyContainer.innerHTML = '<div class="empty-timeline">No history recorded yet</div>';
+  } else {
+    historyContainer.innerHTML = history.slice().reverse().map(h => `
+      <div class="weight-timeline-item">
+        <span class="date">${new Date(h.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</span>
+        <span class="weight">${h.weight.toFixed(1)} kg</span>
+      </div>
+    `).join('');
+  }
+}
+
+function openWeightModal() {
+  document.getElementById('weight-modal').classList.add('open');
+  const profile = JSON.parse(localStorage.getItem('nt_profile_' + currentUser) || '{}');
+  document.getElementById('log-weight-input').value = profile.currentWeight || '';
+  setTimeout(() => document.getElementById('log-weight-input').focus(), 100);
+}
+
+function closeWeightModal() {
+  document.getElementById('weight-modal').classList.remove('open');
+}
+
+function saveWeeklyWeight() {
+  const weightInput = document.getElementById('log-weight-input').value;
+  const weight = parseFloat(weightInput);
+  if (isNaN(weight) || weight <= 0) {
+    alert("Please enter a valid weight.");
+    return;
+  }
+  
+  const profile = JSON.parse(localStorage.getItem('nt_profile_' + currentUser) || '{}');
+  profile.currentWeight = weight;
+  localStorage.setItem('nt_profile_' + currentUser, JSON.stringify(profile));
+  
+  const history = JSON.parse(localStorage.getItem('nt_weight_history_' + currentUser) || '[]');
+  history.push({
+    date: new Date().toLocaleDateString('en-CA'),
+    weight
+  });
+  localStorage.setItem('nt_weight_history_' + currentUser, JSON.stringify(history));
+  
+  closeWeightModal();
+  renderDashboard();
+}
+
+function renderInfographic(logs, targetCal) {
+  const container = document.getElementById('infographic-grid');
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth();
+  
+  document.getElementById('infographic-month-year').textContent = now.toLocaleString('default', { month: 'long', year: 'numeric' });
+  
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  let html = '';
+  
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    const log = logs[dateStr];
+    const completedCal = log ? (log.totals?.calories || 0) : 0;
+    
+    let level = 'empty';
+    const pct = completedCal / targetCal;
+    if (completedCal > 0) {
+      if (pct < 0.5) level = 'low';
+      else if (pct <= 0.85) level = 'mid';
+      else if (pct <= 1.10) level = 'goal';
+      else level = 'surplus';
+    }
+    
+    html += `
+      <div class="info-day ${level}" title="${d} ${now.toLocaleString('default', { month: 'short' })}: ${Math.round(completedCal)} / ${Math.round(targetCal)} kcal">
+        ${d}
+      </div>
+    `;
+  }
+  container.innerHTML = html;
+}
+
+function renderSettings() {
+  if (!currentUser) return;
+  
+  const profileJson = localStorage.getItem('nt_profile_' + currentUser);
+  if (!profileJson) return;
+  
+  const profile = JSON.parse(profileJson);
+  
+  document.getElementById('set-gender').value = profile.gender || 'male';
+  document.getElementById('set-dob').value = profile.dob || '';
+  document.getElementById('set-height').value = profile.height || '';
+  document.getElementById('set-weight').value = profile.currentWeight || '';
+  document.getElementById('set-target-weight').value = profile.targetWeight || '';
+  document.getElementById('set-activity').value = profile.activity || '1.55';
+  document.getElementById('set-goal').value = profile.goal || 'maintain';
+  
+  document.getElementById('override-calories').value = profile.overrideCalories || '';
+  document.getElementById('override-protein').value = profile.overrideProtein || '';
+  document.getElementById('override-carbs').value = profile.overrideCarbs || '';
+  document.getElementById('override-fat').value = profile.overrideFat || '';
+  document.getElementById('override-fiber').value = profile.overrideFiber || '';
+}
+
+function saveProfileSettings() {
+  const gender = document.getElementById('set-gender').value;
+  const dob = document.getElementById('set-dob').value;
+  const height = +document.getElementById('set-height').value;
+  const weight = +document.getElementById('set-weight').value;
+  const targetWeight = +document.getElementById('set-target-weight').value;
+  const activity = +document.getElementById('set-activity').value;
+  const goal = document.getElementById('set-goal').value;
+
+  if (!dob || !height || !weight || !targetWeight) {
+    alert('Please fill in all profile parameters.');
+    return;
+  }
+
+  const age = calculateAge(dob);
+  let bmr = gender === 'male' 
+    ? (10 * weight + 6.25 * height - 5 * age + 5)
+    : (10 * weight + 6.25 * height - 5 * age - 161);
+  
+  const tdee = Math.round(bmr * activity);
+  let targetCalories = tdee;
+  if (goal === 'lose') targetCalories = Math.max(tdee - 500, 1200);
+  else if (goal === 'gain') targetCalories = tdee + 300;
+
+  const protein = Math.round((targetCalories * 0.25) / 4);
+  const carbs = Math.round((targetCalories * 0.50) / 4);
+  const fat = Math.round((targetCalories * 0.25) / 9);
+  const fiber = gender === 'male' ? 38 : 25;
+
+  const oldProfile = JSON.parse(localStorage.getItem('nt_profile_' + currentUser) || '{}');
+  const newProfile = {
+    ...oldProfile,
+    gender,
+    dob,
+    height,
+    currentWeight: weight,
+    targetWeight,
+    activity,
+    goal,
+    targetCalories,
+    targetProtein: protein,
+    targetCarbs: carbs,
+    targetFat: fat,
+    targetFiber: fiber
+  };
+
+  localStorage.setItem('nt_profile_' + currentUser, JSON.stringify(newProfile));
+  
+  if (oldProfile.currentWeight !== weight) {
+    const history = JSON.parse(localStorage.getItem('nt_weight_history_' + currentUser) || '[]');
+    history.push({ date: new Date().toLocaleDateString('en-CA'), weight });
+    localStorage.setItem('nt_weight_history_' + currentUser, JSON.stringify(history));
+  }
+
+  alert('Profile updated and targets recalculated successfully!');
+  renderSettings();
+}
+
+function saveManualOverrides() {
+  const calories = document.getElementById('override-calories').value.trim();
+  const protein = document.getElementById('override-protein').value.trim();
+  const carbs = document.getElementById('override-carbs').value.trim();
+  const fat = document.getElementById('override-fat').value.trim();
+  const fiber = document.getElementById('override-fiber').value.trim();
+  
+  const profile = JSON.parse(localStorage.getItem('nt_profile_' + currentUser) || '{}');
+  
+  if (calories) {
+    profile.overrideCalories = +calories;
+    profile.targetCalories = +calories;
+  } else {
+    delete profile.overrideCalories;
+    const age = calculateAge(profile.dob);
+    let bmr = profile.gender === 'male' 
+      ? (10 * profile.currentWeight + 6.25 * profile.height - 5 * age + 5)
+      : (10 * profile.currentWeight + 6.25 * profile.height - 5 * age - 161);
+    const tdee = Math.round(bmr * profile.activity);
+    let targetCalories = tdee;
+    if (profile.goal === 'lose') targetCalories = Math.max(tdee - 500, 1200);
+    else if (profile.goal === 'gain') targetCalories = tdee + 300;
+    profile.targetCalories = targetCalories;
+  }
+  
+  if (protein) {
+    profile.overrideProtein = +protein;
+    profile.targetProtein = +protein;
+  } else {
+    delete profile.overrideProtein;
+    profile.targetProtein = Math.round((profile.targetCalories * 0.25) / 4);
+  }
+  
+  if (carbs) {
+    profile.overrideCarbs = +carbs;
+    profile.targetCarbs = +carbs;
+  } else {
+    delete profile.overrideCarbs;
+    profile.targetCarbs = Math.round((profile.targetCalories * 0.50) / 4);
+  }
+  
+  if (fat) {
+    profile.overrideFat = +fat;
+    profile.targetFat = +fat;
+  } else {
+    delete profile.overrideFat;
+    profile.targetFat = Math.round((profile.targetCalories * 0.25) / 9);
+  }
+  
+  if (fiber) {
+    profile.overrideFiber = +fiber;
+    profile.targetFiber = +fiber;
+  } else {
+    delete profile.overrideFiber;
+    profile.targetFiber = profile.gender === 'male' ? 38 : 25;
+  }
+  
+  localStorage.setItem('nt_profile_' + currentUser, JSON.stringify(profile));
+  alert('Custom targets updated successfully!');
+  renderSettings();
+}
