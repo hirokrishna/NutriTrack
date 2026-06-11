@@ -1,4 +1,4 @@
-const GEMINI_MODEL = 'gemini-2.5-flash';
+const GEMINI_MODEL = 'gemini-3.1-flash-lite';
 const SYSTEM_PROMPT = `You are a nutrition expert for an Indian diet tracker app. When the user describes food intake, respond ONLY with this exact JSON (no markdown, no extra text, no backticks):
 {"items":[{"food":"Name","amount":"qty","calories":0,"protein":0,"carbs":0,"fat":0,"fibre":0}],"totals":{"calories":0,"protein":0,"carbs":0,"fat":0,"fibre":0},"message":"Short helpful tip"}
 Accurate Indian food values per unit:
