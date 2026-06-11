@@ -16,25 +16,68 @@ function switchAuth(mode) {
   document.getElementById('auth-error').style.display='none';
 }
 function showAuthError(msg) { const el=document.getElementById('auth-error'); el.textContent=msg; el.style.display='block'; }
-function handleLogin() {
+async function handleLogin() {
   const u=document.getElementById('login-username').value.trim().toLowerCase();
   const p=document.getElementById('login-password').value;
   if(!u||!p) return showAuthError('Please fill in all fields.');
-  const users=getUsers();
-  if(!users[u]||users[u].password!==btoa(p)) return showAuthError('Invalid username or password.');
-  loginSuccess(u,users[u].name);
+  
+  const btn = document.querySelector('#login-form .btn-primary');
+  const originalText = btn.textContent;
+  btn.textContent = 'Signing In...';
+  btn.disabled = true;
+  document.getElementById('auth-error').style.display = 'none';
+
+  try {
+    const res = await fetch('/.netlify/functions/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: u, password: btoa(p) })
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      showAuthError(data.error || 'Login failed.');
+    } else {
+      loginSuccess(data.username, data.name);
+    }
+  } catch (err) {
+    showAuthError('Connection error: ' + err.message);
+  } finally {
+    btn.textContent = originalText;
+    btn.disabled = false;
+  }
 }
-function handleRegister() {
+async function handleRegister() {
   const name=document.getElementById('reg-name').value.trim();
   const u=document.getElementById('reg-username').value.trim().toLowerCase();
   const p=document.getElementById('reg-password').value;
   if(!name||!u||!p) return showAuthError('Please fill in all fields.');
   if(p.length<6) return showAuthError('Password must be at least 6 characters.');
   if(!/^[a-z0-9_]+$/.test(u)) return showAuthError('Username: letters, numbers, underscores only.');
-  const users=getUsers();
-  if(users[u]) return showAuthError('Username taken. Choose another.');
-  users[u]={name,password:btoa(p)}; saveUsers(users);
-  loginSuccess(u,name);
+  
+  const btn = document.querySelector('#register-form .btn-primary');
+  const originalText = btn.textContent;
+  btn.textContent = 'Creating Account...';
+  btn.disabled = true;
+  document.getElementById('auth-error').style.display = 'none';
+
+  try {
+    const res = await fetch('/.netlify/functions/signup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: u, password: btoa(p), name })
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      showAuthError(data.error || 'Registration failed.');
+    } else {
+      loginSuccess(data.username, data.name);
+    }
+  } catch (err) {
+    showAuthError('Connection error: ' + err.message);
+  } finally {
+    btn.textContent = originalText;
+    btn.disabled = false;
+  }
 }
 function loginSuccess(username,name) {
   currentUser=username;
