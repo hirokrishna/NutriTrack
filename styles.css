@@ -1099,14 +1099,40 @@ main {
 /* ══ SELECT DROPDOWNS STYLE ══ */
 .form-group select,
 .input-group select {
+  width: 100%;
+  padding: 12px 16px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  outline: none;
+  background-color: var(--card) !important;
+  color: var(--text);
+  cursor: pointer;
+  box-shadow: 0 2px 4px rgba(26, 46, 26, 0.02);
+  transition: all 0.25s ease;
   appearance: none !important;
   -webkit-appearance: none !important;
   -moz-appearance: none !important;
-  background-image: url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%231A2E1A' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E") !important;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%237DAA7D' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E") !important;
   background-repeat: no-repeat !important;
-  background-position: right 14px center !important;
+  background-position: right 16px center !important;
   background-size: 16px !important;
-  padding-right: 40px !important;
+  padding-right: 44px !important;
+}
+
+.form-group select:focus,
+.input-group select:focus {
+  border-color: var(--sage);
+  background-color: #ffffff !important;
+  box-shadow: 0 4px 12px rgba(125, 170, 125, 0.15);
+}
+
+.form-group select:hover,
+.input-group select:hover {
+  border-color: var(--sage-light);
+  box-shadow: 0 4px 8px rgba(26, 46, 26, 0.05);
 }
 
 /* Hide scrollbars on main tab nav */

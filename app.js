@@ -360,11 +360,17 @@ function toggleTargetTime(prefix) {
   const timeInput = document.getElementById(`${prefix}-target-time`);
   if (!timeGroup || !timeInput) return;
   if (goal === 'maintain') {
-    timeGroup.style.display = 'none';
+    timeInput.disabled = true;
+    timeInput.value = '';
     timeInput.required = false;
+    timeGroup.style.opacity = '0.5';
   } else {
-    timeGroup.style.display = 'block';
+    timeInput.disabled = false;
     timeInput.required = true;
+    timeGroup.style.opacity = '1';
+    if (!timeInput.value) {
+      timeInput.value = '12';
+    }
   }
 }
 
@@ -460,7 +466,35 @@ function renderDashboard() {
     return;
   }
   
-  const profile = JSON.parse(profileJson);
+  let profile = JSON.parse(profileJson);
+  
+  // Recalculate if it has legacy/clamped goals or targetTimeWeeks is missing
+  if (profile.goal !== 'maintain' && (!profile.targetTimeWeeks || profile.targetTimeWeeks <= 0)) {
+    profile.targetTimeWeeks = 12; // default 12 weeks
+    const age = calculateAge(profile.dob);
+    let bmr = profile.gender === 'male' 
+      ? (10 * profile.currentWeight + 6.25 * profile.height - 5 * age + 5)
+      : (10 * profile.currentWeight + 6.25 * profile.height - 5 * age - 161);
+    const tdee = Math.round(bmr * profile.activity);
+    const weightDiff = Math.abs(profile.currentWeight - profile.targetWeight);
+    const dailyCalorieChange = (weightDiff * 7700) / (profile.targetTimeWeeks * 7);
+    
+    let targetCalories = tdee;
+    if (profile.goal === 'lose') {
+      targetCalories = tdee - dailyCalorieChange;
+    } else if (profile.goal === 'gain') {
+      targetCalories = tdee + dailyCalorieChange;
+    }
+    
+    profile.targetCalories = Math.max(1200, Math.min(Math.round(targetCalories), 5000));
+    profile.targetProtein = Math.round((profile.targetCalories * 0.25) / 4);
+    profile.targetCarbs = Math.round((profile.targetCalories * 0.50) / 4);
+    profile.targetFat = Math.round((profile.targetCalories * 0.25) / 9);
+    profile.targetFiber = profile.gender === 'male' ? 38 : 25;
+    
+    localStorage.setItem('nt_profile_' + currentUser, JSON.stringify(profile));
+  }
+
   document.getElementById('dash-user-name').textContent = sessionStorage.getItem('nt_session_name') || currentUser;
   
   const logs = JSON.parse(localStorage.getItem('nt_logs_' + currentUser) || '{}');
