@@ -129,7 +129,7 @@ function switchPage(page) {
   document.querySelectorAll('.nav-tab').forEach(t=>t.classList.remove('active'));
   document.getElementById('page-'+page).classList.add('active');
   
-  const tabs = ['dashboard', 'tracker', 'bmi', 'notes', 'settings'];
+  const tabs = ['tracker', 'bmi', 'dashboard', 'notes', 'settings'];
   const idx = tabs.indexOf(page);
   if (idx !== -1) {
     document.querySelectorAll('.nav-tab')[idx].classList.add('active');
@@ -354,6 +354,20 @@ function calculateAge(dobString) {
   return age;
 }
 
+function toggleTargetTime(prefix) {
+  const goal = document.getElementById(`${prefix}-goal`).value;
+  const timeGroup = document.getElementById(`${prefix}-target-time-group`);
+  const timeInput = document.getElementById(`${prefix}-target-time`);
+  if (!timeGroup || !timeInput) return;
+  if (goal === 'maintain') {
+    timeGroup.style.display = 'none';
+    timeInput.required = false;
+  } else {
+    timeGroup.style.display = 'block';
+    timeInput.required = true;
+  }
+}
+
 function submitOnboarding() {
   const gender = document.getElementById('onboard-gender').value;
   const dob = document.getElementById('onboard-dob').value;
@@ -362,10 +376,17 @@ function submitOnboarding() {
   const targetWeight = +document.getElementById('onboard-target-weight').value;
   const activity = +document.getElementById('onboard-activity').value;
   const goal = document.getElementById('onboard-goal').value;
+  const targetTimeWeeks = +document.getElementById('onboard-target-time').value;
 
   if (!dob || !height || !weight || !targetWeight) {
     const err = document.getElementById('onboarding-error');
     err.textContent = 'Please fill in all fields.';
+    err.style.display = 'block';
+    return;
+  }
+  if (goal !== 'maintain' && (!targetTimeWeeks || targetTimeWeeks <= 0)) {
+    const err = document.getElementById('onboarding-error');
+    err.textContent = 'Please enter a valid target time in weeks.';
     err.style.display = 'block';
     return;
   }
@@ -376,9 +397,22 @@ function submitOnboarding() {
     : (10 * weight + 6.25 * height - 5 * age - 161);
   
   const tdee = Math.round(bmr * activity);
+  
+  const weightDiff = Math.abs(weight - targetWeight);
+  let dailyCalorieChange = 0;
+  if (goal !== 'maintain' && targetTimeWeeks > 0) {
+    dailyCalorieChange = (weightDiff * 7700) / (targetTimeWeeks * 7);
+  }
+  
   let targetCalories = tdee;
-  if (goal === 'lose') targetCalories = Math.max(tdee - 500, 1200);
-  else if (goal === 'gain') targetCalories = tdee + 300;
+  if (goal === 'lose') {
+    targetCalories = tdee - dailyCalorieChange;
+  } else if (goal === 'gain') {
+    targetCalories = tdee + dailyCalorieChange;
+  }
+  
+  // Safe boundaries
+  targetCalories = Math.max(1200, Math.min(Math.round(targetCalories), 5000));
 
   const protein = Math.round((targetCalories * 0.25) / 4);
   const carbs = Math.round((targetCalories * 0.50) / 4);
@@ -394,6 +428,7 @@ function submitOnboarding() {
     targetWeight,
     activity,
     goal,
+    targetTimeWeeks: goal === 'maintain' ? 0 : targetTimeWeeks,
     targetCalories,
     targetProtein: protein,
     targetCarbs: carbs,
@@ -411,6 +446,9 @@ function submitOnboarding() {
   switchPage('dashboard');
 }
 
+let activeSelectedDate = null;
+let visibleGraphLines = { calories: true, protein: true, carbs: true, fat: true, fiber: true };
+
 function renderDashboard() {
   if (!currentUser) return;
   
@@ -418,6 +456,7 @@ function renderDashboard() {
   if (!profileJson) {
     document.getElementById('onboarding-overlay').style.display = 'flex';
     document.getElementById('onboarding-error').style.display = 'none';
+    toggleTargetTime('onboard');
     return;
   }
   
@@ -425,54 +464,15 @@ function renderDashboard() {
   document.getElementById('dash-user-name').textContent = sessionStorage.getItem('nt_session_name') || currentUser;
   
   const logs = JSON.parse(localStorage.getItem('nt_logs_' + currentUser) || '{}');
-  const todayStr = new Date().toLocaleDateString('en-CA');
-  const todayLog = logs[todayStr] || { totals: { calories: 0, protein: 0, carbs: 0, fat: 0, fibre: 0 } };
   
-  const completedCal = Math.round(todayLog.totals.calories || 0);
-  const targetCal = Math.round(profile.targetCalories || 2000);
-  document.getElementById('dash-cal-completed').textContent = completedCal;
-  document.getElementById('dash-cal-target').textContent = targetCal;
-  
-  const calRemaining = targetCal - completedCal;
-  const remText = calRemaining > 0 
-    ? `${calRemaining} kcal left` 
-    : `${Math.abs(calRemaining)} kcal surplus`;
-  document.getElementById('dash-cal-remaining').textContent = remText;
-  
-  const circle = document.querySelector('.progress-ring__circle');
-  if (circle) {
-    const radius = circle.r.baseVal.value;
-    const circumference = radius * 2 * Math.PI;
-    circle.style.strokeDasharray = `${circumference} ${circumference}`;
-    const pct = Math.min((completedCal / targetCal) * 100, 100);
-    const offset = circumference - (pct / 100) * circumference;
-    circle.style.strokeDashoffset = offset;
-  }
-  
-  const macros = [
-    { key: 'p', completed: todayLog.totals.protein || 0, target: profile.targetProtein || 120, fillId: 'dash-p-fill', leftId: 'dash-p-left', compId: 'dash-p-completed', targId: 'dash-p-target' },
-    { key: 'c', completed: todayLog.totals.carbs || 0, target: profile.targetCarbs || 250, fillId: 'dash-c-fill', leftId: 'dash-c-left', compId: 'dash-c-completed', targId: 'dash-c-target' },
-    { key: 'f', completed: todayLog.totals.fat || 0, target: profile.targetFat || 65, fillId: 'dash-f-fill', leftId: 'dash-f-left', compId: 'dash-f-completed', targId: 'dash-f-target' },
-    { key: 'fi', completed: todayLog.totals.fibre || 0, target: profile.targetFiber || 30, fillId: 'dash-fi-fill', leftId: 'dash-fi-left', compId: 'dash-fi-completed', targId: 'dash-fi-target' }
-  ];
-  
-  macros.forEach(m => {
-    const comp = m.completed;
-    const targ = m.target;
-    document.getElementById(m.compId).textContent = Number(comp).toFixed(1);
-    document.getElementById(m.targId).textContent = Math.round(targ);
-    
-    const fill = document.getElementById(m.fillId);
-    const pct = Math.min((comp / targ) * 100, 100);
-    fill.style.width = pct + '%';
-    
-    const left = targ - comp;
-    const leftText = left > 0 ? `${left.toFixed(1)}g left` : `${Math.abs(left).toFixed(1)}g over`;
-    document.getElementById(m.leftId).textContent = leftText;
-  });
-
+  // Render Weight Progress Card
   renderWeightProgress(profile);
-  renderInfographic(logs, targetCal);
+  
+  // Render Monthly Calendar/Infographic
+  renderInfographic(logs, profile.targetCalories);
+  
+  // Render Weekly Line Chart
+  renderProgressGraph();
 }
 
 function logDailyMeal(parsed) {
@@ -612,29 +612,396 @@ function renderInfographic(logs, targetCal) {
   document.getElementById('infographic-month-year').textContent = now.toLocaleString('default', { month: 'long', year: 'numeric' });
   
   const daysInMonth = new Date(year, month + 1, 0).getDate();
-  let html = '';
+  const dayNames = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+  let html = dayNames.map(name => `<div class="calendar-day-header">${name}</div>`).join('');
+  
+  // Padding for the first day of the month
+  const firstDayIndex = new Date(year, month, 1).getDay();
+  for (let p = 0; p < firstDayIndex; p++) {
+    html += `<div class="info-day pad-day"></div>`;
+  }
   
   for (let d = 1; d <= daysInMonth; d++) {
     const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
     const log = logs[dateStr];
     const completedCal = log ? (log.totals?.calories || 0) : 0;
     
+    const todayStr = new Date().toLocaleDateString('en-CA');
+    const isFuture = dateStr > todayStr;
+    
     let level = 'empty';
-    const pct = completedCal / targetCal;
     if (completedCal > 0) {
-      if (pct < 0.5) level = 'low';
-      else if (pct <= 0.85) level = 'mid';
-      else if (pct <= 1.10) level = 'goal';
-      else level = 'surplus';
+      level = 'done';
+    } else if (isFuture) {
+      level = 'future';
     }
     
     html += `
-      <div class="info-day ${level}" title="${d} ${now.toLocaleString('default', { month: 'short' })}: ${Math.round(completedCal)} / ${Math.round(targetCal)} kcal">
+      <div class="info-day ${level}" data-date="${dateStr}" onclick="selectDate('${dateStr}')" onmouseenter="previewDate('${dateStr}')">
         ${d}
       </div>
     `;
   }
   container.innerHTML = html;
+  
+  // Handle mouseleave of grid to revert to active selected date
+  container.onmouseleave = () => {
+    if (activeSelectedDate) {
+      showDayPreview(activeSelectedDate);
+    }
+  };
+
+  // Set default view to today
+  const todayStr = new Date().toLocaleDateString('en-CA');
+  selectDate(todayStr);
+}
+
+function selectDate(dateStr) {
+  activeSelectedDate = dateStr;
+  
+  // Highlight active cell in the calendar
+  document.querySelectorAll('.info-day').forEach(el => {
+    el.classList.toggle('active-selected', el.getAttribute('data-date') === dateStr);
+  });
+  
+  showDayPreview(dateStr);
+  renderProgressTable(dateStr);
+}
+
+function previewDate(dateStr) {
+  showDayPreview(dateStr);
+}
+
+function showDayPreview(dateStr) {
+  const previewCard = document.getElementById('day-preview-card');
+  const emptyState = document.getElementById('preview-empty');
+  const contentState = document.getElementById('preview-content');
+  if (!previewCard || !emptyState || !contentState) return;
+  
+  const profile = JSON.parse(localStorage.getItem('nt_profile_' + currentUser) || '{}');
+  const logs = JSON.parse(localStorage.getItem('nt_logs_' + currentUser) || '{}');
+  
+  const todayStr = new Date().toLocaleDateString('en-CA');
+  const isFuture = dateStr > todayStr;
+  
+  // Title Date Formatting
+  const formattedDate = new Date(dateStr).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+  document.getElementById('preview-date-title').textContent = formattedDate;
+  
+  if (isFuture) {
+    emptyState.style.display = 'block';
+    contentState.style.display = 'none';
+    emptyState.querySelector('h4').textContent = "Date Not Arrived";
+    emptyState.querySelector('p').textContent = "This date is in the future. Log meals when the day arrives.";
+    return;
+  }
+  
+  const dayLog = logs[dateStr];
+  if (!dayLog || dayLog.entries.length === 0) {
+    emptyState.style.display = 'block';
+    contentState.style.display = 'none';
+    emptyState.querySelector('h4').textContent = "No Entries Logged";
+    emptyState.querySelector('p').textContent = "You did not log any food for this day.";
+    return;
+  }
+  
+  emptyState.style.display = 'none';
+  contentState.style.display = 'block';
+  
+  const totals = dayLog.totals;
+  const targetCal = Math.round(profile.targetCalories || 2000);
+  const targetProt = profile.targetProtein || 120;
+  const targetCarbs = profile.targetCarbs || 250;
+  const targetFat = profile.targetFat || 65;
+  const targetFiber = profile.targetFiber || 30;
+  
+  document.getElementById('preview-cal-val').textContent = `${Math.round(totals.calories)} / ${targetCal} kcal`;
+  document.getElementById('preview-prot-val').textContent = `${Number(totals.protein).toFixed(1)}g / ${targetProt}g`;
+  document.getElementById('preview-carbs-val').textContent = `${Number(totals.carbs).toFixed(1)}g / ${targetCarbs}g`;
+  document.getElementById('preview-fat-val').textContent = `${Number(totals.fat).toFixed(1)}g / ${targetFat}g`;
+  document.getElementById('preview-fiber-val').textContent = `${Number(totals.fibre).toFixed(1)}g / ${targetFiber}g`;
+  
+  // Status level color code badge
+  const pct = totals.calories / targetCal;
+  const badge = document.getElementById('preview-status');
+  badge.textContent = `${Math.round(pct * 100)}% Cal`;
+  if (pct < 0.5) badge.className = 'status-badge level-low';
+  else if (pct <= 0.85) badge.className = 'status-badge level-mid';
+  else if (pct <= 1.10) badge.className = 'status-badge level-goal';
+  else badge.className = 'status-badge level-surplus';
+  
+  // Render meals list
+  const listContainer = document.getElementById('preview-meals-list');
+  listContainer.innerHTML = dayLog.entries.map(entry => `
+    <div class="preview-meal-item">
+      <div class="meal-meta">
+        <span class="meal-time">${entry.time.substring(0, 5)}</span>
+        <span class="meal-food">${escapeHtml(entry.food)}</span>
+        <span class="meal-amt">${escapeHtml(entry.amount)}</span>
+      </div>
+      <span class="meal-cal">${Math.round(entry.calories)} kcal</span>
+    </div>
+  `).join('');
+}
+
+function renderProgressTable(dateStr) {
+  const profile = JSON.parse(localStorage.getItem('nt_profile_' + currentUser) || '{}');
+  const logs = JSON.parse(localStorage.getItem('nt_logs_' + currentUser) || '{}');
+  
+  const dayLog = logs[dateStr] || { totals: { calories: 0, protein: 0, carbs: 0, fat: 0, fibre: 0 } };
+  const totals = dayLog.totals || { calories: 0, protein: 0, carbs: 0, fat: 0, fibre: 0 };
+  
+  const targetCal = Math.round(profile.targetCalories || 2000);
+  const targetProt = profile.targetProtein || 120;
+  const targetCarbs = profile.targetCarbs || 250;
+  const targetFat = profile.targetFat || 65;
+  const targetFiber = profile.targetFiber || 30;
+  
+  const metrics = [
+    { name: 'Calories', unit: 'kcal', target: targetCal, consumed: Math.round(totals.calories || 0) },
+    { name: 'Protein', unit: 'g', target: targetProt, consumed: totals.protein || 0 },
+    { name: 'Carbs', unit: 'g', target: targetCarbs, consumed: totals.carbs || 0 },
+    { name: 'Fat', unit: 'g', target: targetFat, consumed: totals.fat || 0 },
+    { name: 'Fiber', unit: 'g', target: targetFiber, consumed: totals.fibre || 0 }
+  ];
+  
+  const tbody = document.getElementById('progress-table-body');
+  if (!tbody) return;
+  
+  tbody.innerHTML = metrics.map(m => {
+    const consumedVal = typeof m.consumed === 'number' ? m.consumed : 0;
+    const targetVal = m.target || 1;
+    const pct = Math.min((consumedVal / targetVal) * 100, 100);
+    const remaining = m.target - consumedVal;
+    
+    let remText = '';
+    let remClass = '';
+    if (remaining >= 0) {
+      remText = `${Number(remaining).toFixed(m.name === 'Calories' ? 0 : 1)} ${m.unit} left`;
+      remClass = 'remaining-left';
+    } else {
+      remText = `${Number(Math.abs(remaining)).toFixed(m.name === 'Calories' ? 0 : 1)} ${m.unit} over`;
+      remClass = 'remaining-over';
+    }
+    
+    return `
+      <tr>
+        <td><strong>${m.name}</strong></td>
+        <td>${m.target} ${m.unit}</td>
+        <td>${Number(m.consumed).toFixed(m.name === 'Calories' ? 0 : 1)} ${m.unit}</td>
+        <td class="${remClass}">${remText}</td>
+        <td>
+          <div class="table-progress-container">
+            <div class="table-progress-track">
+              <div class="table-progress-fill fill-${m.name.toLowerCase()}" style="width: ${pct}%"></div>
+            </div>
+            <span class="table-pct-label">${Math.round(pct)}%</span>
+          </div>
+        </td>
+      </tr>
+    `;
+  }).join('');
+}
+
+function renderProgressGraph() {
+  const container = document.getElementById('progress-graph-container');
+  if (!container) return;
+
+  const profile = JSON.parse(localStorage.getItem('nt_profile_' + currentUser) || '{}');
+  const logs = JSON.parse(localStorage.getItem('nt_logs_' + currentUser) || '{}');
+
+  const targetCal = Math.round(profile.targetCalories || 2000);
+  const targetProt = profile.targetProtein || 120;
+  const targetCarbs = profile.targetCarbs || 250;
+  const targetFat = profile.targetFat || 65;
+  const targetFiber = profile.targetFiber || 30;
+
+  // Gather past 7 dates
+  const dates = [];
+  const dateLabels = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    dates.push(d.toLocaleDateString('en-CA'));
+    dateLabels.push(d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }));
+  }
+
+  // Gather metrics data for past 7 days
+  const data = {
+    calories: [],
+    protein: [],
+    carbs: [],
+    fat: [],
+    fiber: []
+  };
+
+  dates.forEach(dateStr => {
+    const log = logs[dateStr] || { totals: { calories: 0, protein: 0, carbs: 0, fat: 0, fibre: 0 } };
+    const totals = log.totals || { calories: 0, protein: 0, carbs: 0, fat: 0, fibre: 0 };
+    
+    data.calories.push({ pct: (totals.calories || 0) / targetCal * 100, abs: totals.calories });
+    data.protein.push({ pct: (totals.protein || 0) / targetProt * 100, abs: totals.protein });
+    data.carbs.push({ pct: (totals.carbs || 0) / targetCarbs * 100, abs: totals.carbs });
+    data.fat.push({ pct: (totals.fat || 0) / targetFat * 100, abs: totals.fat });
+    data.fiber.push({ pct: (totals.fibre || 0) / targetFiber * 100, abs: totals.fibre });
+  });
+
+  const chartWidth = 700;
+  const chartHeight = 200;
+  const paddingLeft = 60;
+  const paddingRight = 40;
+  const paddingTop = 20;
+  const paddingBottom = 40;
+
+  const svgWidth = chartWidth + paddingLeft + paddingRight;
+  const svgHeight = chartHeight + paddingTop + paddingBottom;
+
+  const getX = (index) => paddingLeft + index * (chartWidth / 6);
+  const getY = (pct) => {
+    const clamped = Math.min(Math.max(pct, 0), 150);
+    return paddingTop + chartHeight - (clamped / 150) * chartHeight;
+  };
+
+  const metricsInfo = {
+    calories: { name: 'Calories', color: '#7DAA7D', data: data.calories, unit: 'kcal' },
+    protein: { name: 'Protein', color: '#A8C8A8', data: data.protein, unit: 'g' },
+    carbs: { name: 'Carbs', color: '#F5C842', data: data.carbs, unit: 'g' },
+    fat: { name: 'Fat', color: '#E8724A', data: data.fat, unit: 'g' },
+    fiber: { name: 'Fiber', color: '#9C27B0', data: data.fiber, unit: 'g' }
+  };
+
+  // Generate background grid lines
+  let gridLinesHtml = '';
+  // Horizontal grid lines (0%, 50%, 100%, 150%)
+  [0, 50, 100, 150].forEach(val => {
+    const y = getY(val);
+    gridLinesHtml += `
+      <line x1="${paddingLeft}" y1="${y}" x2="${paddingLeft + chartWidth}" y2="${y}" stroke="var(--border)" stroke-width="1" stroke-dasharray="4,4" />
+      <text x="${paddingLeft - 10}" y="${y + 4}" font-size="11" fill="var(--text-muted)" font-weight="600" text-anchor="end">${val}%</text>
+    `;
+  });
+
+  // Vertical grid lines and date labels
+  dates.forEach((dateStr, i) => {
+    const x = getX(i);
+    gridLinesHtml += `
+      <line x1="${x}" y1="${paddingTop}" x2="${x}" y2="${paddingTop + chartHeight}" stroke="var(--border)" stroke-width="1" opacity="0.5" />
+      <text x="${x}" y="${paddingTop + chartHeight + 20}" font-size="11" fill="var(--text-muted)" font-weight="600" text-anchor="middle">${dateLabels[i]}</text>
+    `;
+  });
+
+  let linesHtml = '';
+  let gradientsHtml = '';
+  let markersHtml = '';
+
+  Object.keys(metricsInfo).forEach(key => {
+    if (!visibleGraphLines[key]) return;
+
+    const info = metricsInfo[key];
+    let pathD = '';
+    let areaD = '';
+
+    info.data.forEach((item, idx) => {
+      const x = getX(idx);
+      const y = getY(item.pct);
+      if (idx === 0) {
+        pathD += `M ${x} ${y}`;
+        areaD = `M ${x} ${y}`;
+      } else {
+        pathD += ` L ${x} ${y}`;
+        areaD += ` L ${x} ${y}`;
+      }
+
+      const absValRounded = Math.round(item.abs);
+      const labelText = `${info.name}: ${absValRounded}${info.unit} (${Math.round(item.pct)}%)`;
+
+      // Draw dot markers
+      markersHtml += `
+        <circle cx="${x}" cy="${y}" r="5" fill="#ffffff" stroke="${info.color}" stroke-width="3" class="graph-marker">
+          <title>${labelText}</title>
+        </circle>
+      `;
+    });
+
+    areaD += ` L ${getX(6)} ${paddingTop + chartHeight} L ${getX(0)} ${paddingTop + chartHeight} Z`;
+
+    // Add path with premium glow effects
+    linesHtml += `
+      <path d="${pathD}" fill="none" stroke="${info.color}" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" filter="url(#glow)" />
+    `;
+    gradientsHtml += `
+      <path d="${areaD}" fill="url(#grad-${key})" opacity="0.15" />
+    `;
+  });
+
+  // Build the legend HTML
+  let legendHtml = `
+    <div class="graph-legend">
+  `;
+  Object.keys(metricsInfo).forEach(key => {
+    const info = metricsInfo[key];
+    const isVisible = visibleGraphLines[key];
+    legendHtml += `
+      <div class="legend-item-toggle ${isVisible ? 'active' : 'inactive'}" onclick="toggleGraphLine('${key}')">
+        <span class="legend-color-dot" style="background-color: ${info.color}"></span>
+        <span class="legend-name">${info.name}</span>
+      </div>
+    `;
+  });
+  legendHtml += `</div>`;
+
+  // Standard SVG template with definitions
+  const svgHtml = `
+    <svg viewBox="0 0 ${svgWidth} ${svgHeight}" width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <!-- Gradients for area under curves -->
+        <linearGradient id="grad-calories" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#7DAA7D" stop-opacity="1"/>
+          <stop offset="100%" stop-color="#7DAA7D" stop-opacity="0"/>
+        </linearGradient>
+        <linearGradient id="grad-protein" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#A8C8A8" stop-opacity="1"/>
+          <stop offset="100%" stop-color="#A8C8A8" stop-opacity="0"/>
+        </linearGradient>
+        <linearGradient id="grad-carbs" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#F5C842" stop-opacity="1"/>
+          <stop offset="100%" stop-color="#F5C842" stop-opacity="0"/>
+        </linearGradient>
+        <linearGradient id="grad-fat" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#E8724A" stop-opacity="1"/>
+          <stop offset="100%" stop-color="#E8724A" stop-opacity="0"/>
+        </linearGradient>
+        <linearGradient id="grad-fiber" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#9C27B0" stop-opacity="1"/>
+          <stop offset="100%" stop-color="#9C27B0" stop-opacity="0"/>
+        </linearGradient>
+
+        <!-- Drop shadow filter for 3D glow effect -->
+        <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+          <feDropShadow dx="0" dy="4" stdDeviation="4" flood-color="#1A2E1A" flood-opacity="0.15"/>
+        </filter>
+      </defs>
+
+      <!-- Draw Grid -->
+      ${gridLinesHtml}
+
+      <!-- Draw Area Gradients -->
+      ${gradientsHtml}
+
+      <!-- Draw Lines -->
+      ${linesHtml}
+
+      <!-- Draw Markers -->
+      ${markersHtml}
+    </svg>
+  `;
+
+  container.innerHTML = legendHtml + svgHtml;
+}
+
+function toggleGraphLine(key) {
+  visibleGraphLines[key] = !visibleGraphLines[key];
+  renderProgressGraph();
 }
 
 function renderSettings() {
@@ -653,11 +1020,8 @@ function renderSettings() {
   document.getElementById('set-activity').value = profile.activity || '1.55';
   document.getElementById('set-goal').value = profile.goal || 'maintain';
   
-  document.getElementById('override-calories').value = profile.overrideCalories || '';
-  document.getElementById('override-protein').value = profile.overrideProtein || '';
-  document.getElementById('override-carbs').value = profile.overrideCarbs || '';
-  document.getElementById('override-fat').value = profile.overrideFat || '';
-  document.getElementById('override-fiber').value = profile.overrideFiber || '';
+  document.getElementById('set-target-time').value = profile.targetTimeWeeks || '';
+  toggleTargetTime('set');
 }
 
 function saveProfileSettings() {
@@ -668,9 +1032,14 @@ function saveProfileSettings() {
   const targetWeight = +document.getElementById('set-target-weight').value;
   const activity = +document.getElementById('set-activity').value;
   const goal = document.getElementById('set-goal').value;
+  const targetTimeWeeks = +document.getElementById('set-target-time').value;
 
   if (!dob || !height || !weight || !targetWeight) {
     alert('Please fill in all profile parameters.');
+    return;
+  }
+  if (goal !== 'maintain' && (!targetTimeWeeks || targetTimeWeeks <= 0)) {
+    alert('Please enter a valid target time in weeks.');
     return;
   }
 
@@ -680,9 +1049,22 @@ function saveProfileSettings() {
     : (10 * weight + 6.25 * height - 5 * age - 161);
   
   const tdee = Math.round(bmr * activity);
+  
+  const weightDiff = Math.abs(weight - targetWeight);
+  let dailyCalorieChange = 0;
+  if (goal !== 'maintain' && targetTimeWeeks > 0) {
+    dailyCalorieChange = (weightDiff * 7700) / (targetTimeWeeks * 7);
+  }
+  
   let targetCalories = tdee;
-  if (goal === 'lose') targetCalories = Math.max(tdee - 500, 1200);
-  else if (goal === 'gain') targetCalories = tdee + 300;
+  if (goal === 'lose') {
+    targetCalories = tdee - dailyCalorieChange;
+  } else if (goal === 'gain') {
+    targetCalories = tdee + dailyCalorieChange;
+  }
+  
+  // Safe boundaries
+  targetCalories = Math.max(1200, Math.min(Math.round(targetCalories), 5000));
 
   const protein = Math.round((targetCalories * 0.25) / 4);
   const carbs = Math.round((targetCalories * 0.50) / 4);
@@ -699,6 +1081,7 @@ function saveProfileSettings() {
     targetWeight,
     activity,
     goal,
+    targetTimeWeeks: goal === 'maintain' ? 0 : targetTimeWeeks,
     targetCalories,
     targetProtein: protein,
     targetCarbs: carbs,
@@ -716,66 +1099,5 @@ function saveProfileSettings() {
 
   alert('Profile updated and targets recalculated successfully!');
   renderSettings();
-}
-
-function saveManualOverrides() {
-  const calories = document.getElementById('override-calories').value.trim();
-  const protein = document.getElementById('override-protein').value.trim();
-  const carbs = document.getElementById('override-carbs').value.trim();
-  const fat = document.getElementById('override-fat').value.trim();
-  const fiber = document.getElementById('override-fiber').value.trim();
-  
-  const profile = JSON.parse(localStorage.getItem('nt_profile_' + currentUser) || '{}');
-  
-  if (calories) {
-    profile.overrideCalories = +calories;
-    profile.targetCalories = +calories;
-  } else {
-    delete profile.overrideCalories;
-    const age = calculateAge(profile.dob);
-    let bmr = profile.gender === 'male' 
-      ? (10 * profile.currentWeight + 6.25 * profile.height - 5 * age + 5)
-      : (10 * profile.currentWeight + 6.25 * profile.height - 5 * age - 161);
-    const tdee = Math.round(bmr * profile.activity);
-    let targetCalories = tdee;
-    if (profile.goal === 'lose') targetCalories = Math.max(tdee - 500, 1200);
-    else if (profile.goal === 'gain') targetCalories = tdee + 300;
-    profile.targetCalories = targetCalories;
-  }
-  
-  if (protein) {
-    profile.overrideProtein = +protein;
-    profile.targetProtein = +protein;
-  } else {
-    delete profile.overrideProtein;
-    profile.targetProtein = Math.round((profile.targetCalories * 0.25) / 4);
-  }
-  
-  if (carbs) {
-    profile.overrideCarbs = +carbs;
-    profile.targetCarbs = +carbs;
-  } else {
-    delete profile.overrideCarbs;
-    profile.targetCarbs = Math.round((profile.targetCalories * 0.50) / 4);
-  }
-  
-  if (fat) {
-    profile.overrideFat = +fat;
-    profile.targetFat = +fat;
-  } else {
-    delete profile.overrideFat;
-    profile.targetFat = Math.round((profile.targetCalories * 0.25) / 9);
-  }
-  
-  if (fiber) {
-    profile.overrideFiber = +fiber;
-    profile.targetFiber = +fiber;
-  } else {
-    delete profile.overrideFiber;
-    profile.targetFiber = profile.gender === 'male' ? 38 : 25;
-  }
-  
-  localStorage.setItem('nt_profile_' + currentUser, JSON.stringify(profile));
-  alert('Custom targets updated successfully!');
-  renderSettings();
+  renderDashboard();
 }
