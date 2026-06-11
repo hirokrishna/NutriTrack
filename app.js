@@ -1,12 +1,22 @@
 // ══ STATE ══
 let currentUser = null;
 let editingNoteId = null;
+let notesCache = [];
 
-// ══ STORAGE ══
-function getUsers() { return JSON.parse(localStorage.getItem('nt_users')||'{}'); }
-function saveUsers(u) { localStorage.setItem('nt_users', JSON.stringify(u)); }
-function getUserData(key) { const d=JSON.parse(localStorage.getItem('nt_data_'+currentUser)||'{}'); return key?(d[key]||[]):d; }
-function setUserData(key,val) { const d=getUserData(); d[key]=val; localStorage.setItem('nt_data_'+currentUser,JSON.stringify(d)); }
+async function syncNotesFromDB() {
+  if (!currentUser) return;
+  try {
+    const res = await fetch(`/.netlify/functions/notes?username=${currentUser}`);
+    if (res.ok) {
+      const data = await res.json();
+      notesCache = data.notes || [];
+      localStorage.setItem('nt_data_notes_' + currentUser, JSON.stringify(notesCache));
+      renderNotes();
+    }
+  } catch (err) {
+    console.error("Failed to sync notes from database:", err);
+  }
+}
 
 // ══ AUTH ══
 function switchAuth(mode) {
@@ -82,20 +92,29 @@ async function handleRegister() {
 function loginSuccess(username,name) {
   currentUser=username;
   sessionStorage.setItem('nt_session',username);
+  sessionStorage.setItem('nt_session_name',name);
   document.getElementById('auth-overlay').style.display='none';
   document.getElementById('app').style.display='flex';
   document.getElementById('user-badge').textContent=name.charAt(0).toUpperCase();
   document.getElementById('username-display').textContent=name.split(' ')[0];
+  
+  notesCache = [];
   renderNotes();
+  syncNotesFromDB();
 }
 function logout() {
-  currentUser=null; sessionStorage.removeItem('nt_session');
+  currentUser=null;
+  sessionStorage.removeItem('nt_session');
+  sessionStorage.removeItem('nt_session_name');
   document.getElementById('auth-overlay').style.display='flex';
   document.getElementById('app').style.display='none';
 }
 window.addEventListener('DOMContentLoaded',()=>{
   const s=sessionStorage.getItem('nt_session');
-  if(s){const users=getUsers(); if(users[s]) loginSuccess(s,users[s].name);}
+  const name=sessionStorage.getItem('nt_session_name');
+  if(s && name){
+    loginSuccess(s, name);
+  }
   document.getElementById('login-password').addEventListener('keydown',e=>{if(e.key==='Enter')handleLogin();});
   document.getElementById('login-username').addEventListener('keydown',e=>{if(e.key==='Enter')handleLogin();});
   document.getElementById('reg-password').addEventListener('keydown',e=>{if(e.key==='Enter')handleRegister();});
@@ -227,8 +246,11 @@ function calculateBMI() {
 
 // ══ NOTES ══
 function renderNotes(search='') {
-  const notes=getUserData('notes'), grid=document.getElementById('notes-grid');
-  const filtered=notes.filter(n=>(n.title||'').toLowerCase().includes(search.toLowerCase())||(n.content||'').toLowerCase().includes(search.toLowerCase()));
+  if (notesCache.length === 0 && currentUser) {
+    notesCache = JSON.parse(localStorage.getItem('nt_data_notes_' + currentUser) || '[]');
+  }
+  const grid=document.getElementById('notes-grid');
+  const filtered=notesCache.filter(n=>(n.title||'').toLowerCase().includes(search.toLowerCase())||(n.content||'').toLowerCase().includes(search.toLowerCase()));
   if(filtered.length===0){
     grid.innerHTML='<div class="empty-notes" style="grid-column:1/-1"><div class="empty-icon">📋</div><h3>'+(search?'No notes match':'No notes yet')+'</h3><p>'+(search?'Try different keywords.':'Start jotting down your nutrition goals and meal plans.')+'</p></div>';
     return;
@@ -238,22 +260,71 @@ function renderNotes(search='') {
 function escapeHtml(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function openNoteModal(id=null) {
   editingNoteId=id;
-  if(id){const note=getUserData('notes').find(n=>n.id===id);if(!note)return;document.getElementById('modal-title').textContent='Edit Note';document.getElementById('note-title').value=note.title;document.getElementById('note-content').value=note.content;}
+  if(id){const note=notesCache.find(n=>n.id===id);if(!note)return;document.getElementById('modal-title').textContent='Edit Note';document.getElementById('note-title').value=note.title;document.getElementById('note-content').value=note.content;}
   else{document.getElementById('modal-title').textContent='New Note';document.getElementById('note-title').value='';document.getElementById('note-content').value='';}
   document.getElementById('note-modal').classList.add('open');
   setTimeout(()=>document.getElementById('note-title').focus(),100);
 }
 function closeNoteModal(){document.getElementById('note-modal').classList.remove('open');editingNoteId=null;}
-function saveNote(){
+async function saveNote(){
   const title=document.getElementById('note-title').value.trim(), content=document.getElementById('note-content').value.trim();
   if(!title&&!content){alert('Please write something before saving.');return;}
-  let notes=getUserData('notes');
-  if(editingNoteId){notes=notes.map(n=>n.id===editingNoteId?{...n,title:title||'Untitled',content,updated:Date.now()}:n);}
-  else{notes.unshift({id:'note_'+Date.now(),title:title||'Untitled',content,created:Date.now()});}
-  setUserData('notes',notes); closeNoteModal(); renderNotes();
+  
+  const id = editingNoteId || 'note_' + Date.now();
+  const createdTime = editingNoteId ? (notesCache.find(n => n.id === editingNoteId)?.created || Date.now()) : Date.now();
+  const newNote = {
+    id,
+    title: title || 'Untitled',
+    content,
+    created: createdTime
+  };
+  
+  if(editingNoteId){
+    notesCache = notesCache.map(n=>n.id===editingNoteId ? newNote : n);
+  } else {
+    notesCache.unshift(newNote);
+  }
+  localStorage.setItem('nt_data_notes_' + currentUser, JSON.stringify(notesCache));
+  closeNoteModal();
+  renderNotes();
+
+  try {
+    await fetch('/.netlify/functions/notes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'save',
+        username: currentUser,
+        noteId: id,
+        title: title || 'Untitled',
+        content,
+        created: new Date(createdTime).toISOString()
+      })
+    });
+  } catch (err) {
+    console.error("Failed to save note to database:", err);
+  }
 }
-function deleteNote(e,id){
-  e.stopPropagation(); if(!confirm('Delete this note?'))return;
-  setUserData('notes',getUserData('notes').filter(n=>n.id!==id)); renderNotes();
+async function deleteNote(e,id){
+  e.stopPropagation();
+  if(!confirm('Delete this note?')) return;
+  
+  notesCache = notesCache.filter(n=>n.id!==id);
+  localStorage.setItem('nt_data_notes_' + currentUser, JSON.stringify(notesCache));
+  renderNotes();
+
+  try {
+    await fetch('/.netlify/functions/notes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'delete',
+        username: currentUser,
+        noteId: id
+      })
+    });
+  } catch (err) {
+    console.error("Failed to delete note from database:", err);
+  }
 }
 document.getElementById('note-modal').addEventListener('click',function(e){if(e.target===this)closeNoteModal();});
