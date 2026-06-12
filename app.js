@@ -388,20 +388,38 @@ function calculateAge(dobString) {
 
 function toggleTargetTime(prefix) {
   const goal = document.getElementById(`${prefix}-goal`).value;
+  const targetGroup = document.getElementById(`${prefix}-target-group`);
+  const targetWeightInput = document.getElementById(`${prefix}-target-weight`);
   const timeGroup = document.getElementById(`${prefix}-target-time-group`);
   const timeInput = document.getElementById(`${prefix}-target-time`);
-  if (!timeGroup || !timeInput) return;
+  
   if (goal === 'maintain') {
-    timeGroup.style.display = 'none';
-    timeInput.disabled = true;
-    timeInput.value = '';
-    timeInput.required = false;
+    if (targetGroup) targetGroup.style.display = 'none';
+    if (targetWeightInput) {
+      targetWeightInput.disabled = true;
+      targetWeightInput.required = false;
+      const currentWeight = document.getElementById(`${prefix}-weight`)?.value;
+      if (currentWeight) targetWeightInput.value = currentWeight;
+    }
+    if (timeGroup) timeGroup.style.display = 'none';
+    if (timeInput) {
+      timeInput.disabled = true;
+      timeInput.value = '';
+      timeInput.required = false;
+    }
   } else {
-    timeGroup.style.display = 'block';
-    timeInput.disabled = false;
-    timeInput.required = true;
-    if (!timeInput.value) {
-      timeInput.value = '12';
+    if (targetGroup) targetGroup.style.display = 'flex';
+    if (targetWeightInput) {
+      targetWeightInput.disabled = false;
+      targetWeightInput.required = true;
+    }
+    if (timeGroup) timeGroup.style.display = 'block';
+    if (timeInput) {
+      timeInput.disabled = false;
+      timeInput.required = true;
+      if (!timeInput.value) {
+        timeInput.value = '12';
+      }
     }
   }
 }

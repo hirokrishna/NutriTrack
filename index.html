@@ -353,11 +353,17 @@
               <div class="form-group"><label>Height (cm)</label><input type="number" id="set-height" placeholder="175">
               </div>
               <div class="form-group"><label>Current Weight (kg)</label><input type="number" id="set-weight"
-                  placeholder="70"></div>
+                  placeholder="70" oninput="if(document.getElementById('set-goal').value==='maintain') document.getElementById('set-target-weight').value=this.value;"></div>
             </div>
             <div class="form-row">
-              <div class="form-group"><label>Target Weight (kg)</label><input type="number" id="set-target-weight"
-                  placeholder="65"></div>
+              <div class="form-group">
+                <label>Weight Goal</label>
+                <select id="set-goal" onchange="toggleTargetTime('set')">
+                  <option value="lose">Lose Weight</option>
+                  <option value="maintain">Maintain Weight</option>
+                  <option value="gain">Gain Weight</option>
+                </select>
+              </div>
               <div class="form-group">
                 <label>Activity Level</label>
                 <select id="set-activity">
@@ -369,15 +375,9 @@
                 </select>
               </div>
             </div>
-            <div class="form-row">
-              <div class="form-group">
-                <label>Weight Goal</label>
-                <select id="set-goal" onchange="toggleTargetTime('set')">
-                  <option value="lose">Lose Weight</option>
-                  <option value="maintain">Maintain Weight</option>
-                  <option value="gain">Gain Weight</option>
-                </select>
-              </div>
+            <div class="form-row" id="set-target-group">
+              <div class="form-group"><label>Target Weight (kg)</label><input type="number" id="set-target-weight"
+                  placeholder="65"></div>
               <div class="form-group" id="set-target-time-group">
                 <label>Target Time (weeks)</label>
                 <input type="number" id="set-target-time" placeholder="e.g. 10" min="1" max="104">
@@ -429,12 +429,18 @@
         <div class="form-group"><label>Height (cm)</label><input type="number" id="onboard-height"
             placeholder="e.g. 170" required></div>
         <div class="form-group"><label>Current Weight (kg)</label><input type="number" id="onboard-weight"
-            placeholder="e.g. 65" required></div>
+            placeholder="e.g. 65" required oninput="if(document.getElementById('onboard-goal').value==='maintain') document.getElementById('onboard-target-weight').value=this.value;"></div>
       </div>
 
       <div class="form-row">
-        <div class="form-group"><label>Target Weight (kg)</label><input type="number" id="onboard-target-weight"
-            placeholder="e.g. 60" required></div>
+        <div class="form-group">
+          <label>Weight Goal</label>
+          <select id="onboard-goal" onchange="toggleTargetTime('onboard')">
+            <option value="lose">Lose Weight</option>
+            <option value="maintain" selected>Maintain Weight</option>
+            <option value="gain">Gain Weight</option>
+          </select>
+        </div>
         <div class="form-group">
           <label>Activity Level</label>
           <select id="onboard-activity">
@@ -447,16 +453,10 @@
         </div>
       </div>
 
-      <div class="form-row">
-        <div class="form-group">
-          <label>Weight Goal</label>
-          <select id="onboard-goal" onchange="toggleTargetTime('onboard')">
-            <option value="lose">Lose Weight</option>
-            <option value="maintain" selected>Maintain Weight</option>
-            <option value="gain">Gain Weight</option>
-          </select>
-        </div>
-        <div class="form-group" id="onboard-target-time-group" style="display: none;">
+      <div class="form-row" id="onboard-target-group" style="display: none;">
+        <div class="form-group"><label>Target Weight (kg)</label><input type="number" id="onboard-target-weight"
+            placeholder="e.g. 60" required></div>
+        <div class="form-group" id="onboard-target-time-group">
           <label>Target Time (weeks)</label>
           <input type="number" id="onboard-target-time" placeholder="e.g. 10" min="1" max="104">
         </div>
