@@ -9,9 +9,20 @@ async function syncNotesFromDB() {
     const res = await fetch(`/.netlify/functions/notes?username=${currentUser}`);
     if (res.ok) {
       const data = await res.json();
-      notesCache = data.notes || [];
-      localStorage.setItem('nt_data_notes_' + currentUser, JSON.stringify(notesCache));
-      renderNotes();
+      const serverNotes = data.notes || [];
+      const localNotesStr = localStorage.getItem('nt_data_notes_' + currentUser);
+      const localNotes = localNotesStr ? JSON.parse(localNotesStr) : [];
+      
+      if (serverNotes.length === 0 && localNotes.length > 0) {
+        notesCache = localNotes;
+      } else {
+        notesCache = serverNotes;
+        localStorage.setItem('nt_data_notes_' + currentUser, JSON.stringify(notesCache));
+      }
+      
+      if (document.getElementById('page-notes').classList.contains('active')) {
+        renderNotes();
+      }
     }
   } catch (err) {
     console.error("Failed to sync notes from database:", err);
@@ -237,13 +248,8 @@ function calculateBMI() {
   let bmr = gender === 'male' ? 10 * weight + 6.25 * height - 5 * age + 5 : 10 * weight + 6.25 * height - 5 * age - 161;
   const tdee = Math.round(bmr * activity);
   
-  let dummyTargetWeight = weight;
-  if (goal === 'lose') dummyTargetWeight = weight - 5;
-  if (goal === 'gain') dummyTargetWeight = weight + 5;
-  
-  // Provide a dummy target time of 11 weeks for a standard ~500 cal deficit/surplus
-  const targets = calculateTargets(weight, height, age, gender, activity, goal, dummyTargetWeight, 11);
-  let target = targets.targetCalories;
+  let target = tdee;
+  if (goal === 'lose') target = tdee - 500; else if (goal === 'gain') target = tdee + 300;
   
   let ibw = gender === 'male' ? 50 + 2.3 * ((height - 152.4) / 2.54) : 45.5 + 2.3 * ((height - 152.4) / 2.54);
   ibw = Math.max(Math.round(ibw), 40);
@@ -257,9 +263,7 @@ function calculateBMI() {
   document.getElementById('res-target').textContent = target;
   document.getElementById('res-ibw').textContent = ibw;
   
-  const protein = targets.targetProtein;
-  const carbs = targets.targetCarbs;
-  const fat = targets.targetFat;
+  const protein = Math.round(target * 0.25 / 4), carbs = Math.round(target * 0.50 / 4), fat = Math.round(target * 0.25 / 9);
   
   document.getElementById('macro-bars').innerHTML =
     '<div class="macro-bar"><span class="macro-bar-label">Protein</span><div class="macro-bar-track"><div class="macro-bar-fill" style="width:25%;background:#A8C8A8"></div></div><span class="macro-bar-val">' + protein + 'g/day</span></div>' +
