@@ -236,8 +236,15 @@ function calculateBMI() {
   else { category = 'Obese Class II+'; color = '#A02020'; markerPct = 95; msg = 'Please consult a healthcare professional.'; }
   let bmr = gender === 'male' ? 10 * weight + 6.25 * height - 5 * age + 5 : 10 * weight + 6.25 * height - 5 * age - 161;
   const tdee = Math.round(bmr * activity);
-  let target = tdee;
-  if (goal === 'lose') target = tdee - 500; else if (goal === 'gain') target = tdee + 300;
+  
+  let dummyTargetWeight = weight;
+  if (goal === 'lose') dummyTargetWeight = weight - 5;
+  if (goal === 'gain') dummyTargetWeight = weight + 5;
+  
+  // Provide a dummy target time of 11 weeks for a standard ~500 cal deficit/surplus
+  const targets = calculateTargets(weight, height, age, gender, activity, goal, dummyTargetWeight, 11);
+  let target = targets.targetCalories;
+  
   let ibw = gender === 'male' ? 50 + 2.3 * ((height - 152.4) / 2.54) : 45.5 + 2.3 * ((height - 152.4) / 2.54);
   ibw = Math.max(Math.round(ibw), 40);
   document.getElementById('bmi-result').classList.add('visible');
@@ -249,7 +256,11 @@ function calculateBMI() {
   document.getElementById('res-tdee').textContent = tdee;
   document.getElementById('res-target').textContent = target;
   document.getElementById('res-ibw').textContent = ibw;
-  const protein = Math.round(target * 0.25 / 4), carbs = Math.round(target * 0.50 / 4), fat = Math.round(target * 0.25 / 9);
+  
+  const protein = targets.targetProtein;
+  const carbs = targets.targetCarbs;
+  const fat = targets.targetFat;
+  
   document.getElementById('macro-bars').innerHTML =
     '<div class="macro-bar"><span class="macro-bar-label">Protein</span><div class="macro-bar-track"><div class="macro-bar-fill" style="width:25%;background:#A8C8A8"></div></div><span class="macro-bar-val">' + protein + 'g/day</span></div>' +
     '<div class="macro-bar"><span class="macro-bar-label">Carbs</span><div class="macro-bar-track"><div class="macro-bar-fill" style="width:50%;background:#F5C842"></div></div><span class="macro-bar-val">' + carbs + 'g/day</span></div>' +
@@ -354,59 +365,20 @@ function calculateAge(dobString) {
   return age;
 }
 
-function calculateTargets(weight, height, age, gender, activity, goal, targetWeight, targetTimeWeeks) {
-  let bmr = gender === 'male'
-    ? (10 * weight + 6.25 * height - 5 * age + 5)
-    : (10 * weight + 6.25 * height - 5 * age - 161);
-  const tdee = Math.round(bmr * activity);
-  const weightDiff = Math.abs(weight - targetWeight);
-  let dailyCalorieChange = 0;
-  if (goal !== 'maintain' && targetTimeWeeks > 0) {
-    dailyCalorieChange = (weightDiff * 7700) / (targetTimeWeeks * 7);
-  }
-  let targetCalories = tdee;
-  if (goal === 'lose') {
-    targetCalories = tdee - dailyCalorieChange;
-  } else if (goal === 'gain') {
-    targetCalories = tdee + dailyCalorieChange;
-  }
-  targetCalories = Math.max(1200, Math.min(Math.round(targetCalories), 5000));
-
-  let proteinPerKg = 1.5;
-  if (goal === 'gain') proteinPerKg = 2.2;
-  if (goal === 'lose') proteinPerKg = 2.2; // Midpoint of 1.8 to 2.7
-
-  const protein = Math.round(weight * proteinPerKg);
-  const proteinCals = protein * 4;
-
-  let fatPercent = 0.25;
-  if (goal === 'maintain') fatPercent = 0.28;
-  const fat = Math.round((targetCalories * fatPercent) / 9);
-  const fatCals = fat * 9;
-
-  let remainingCals = targetCalories - proteinCals - fatCals;
-  if (remainingCals < 0) remainingCals = 0;
-  const carbs = Math.round(remainingCals / 4);
-
-  const fiber = Math.round((targetCalories / 1000) * 14);
-
-  return { targetCalories, targetProtein: protein, targetCarbs: carbs, targetFat: fat, targetFiber: fiber };
-}
-
 function toggleTargetTime(prefix) {
   const goal = document.getElementById(`${prefix}-goal`).value;
   const timeGroup = document.getElementById(`${prefix}-target-time-group`);
   const timeInput = document.getElementById(`${prefix}-target-time`);
   if (!timeGroup || !timeInput) return;
   if (goal === 'maintain') {
+    timeGroup.style.display = 'none';
     timeInput.disabled = true;
     timeInput.value = '';
     timeInput.required = false;
-    timeGroup.style.opacity = '0.5';
   } else {
+    timeGroup.style.display = 'block';
     timeInput.disabled = false;
     timeInput.required = true;
-    timeGroup.style.opacity = '1';
     if (!timeInput.value) {
       timeInput.value = '12';
     }
@@ -437,7 +409,32 @@ function submitOnboarding() {
   }
 
   const age = calculateAge(dob);
-  const targets = calculateTargets(weight, height, age, gender, activity, goal, targetWeight, targetTimeWeeks);
+  let bmr = gender === 'male'
+    ? (10 * weight + 6.25 * height - 5 * age + 5)
+    : (10 * weight + 6.25 * height - 5 * age - 161);
+
+  const tdee = Math.round(bmr * activity);
+
+  const weightDiff = Math.abs(weight - targetWeight);
+  let dailyCalorieChange = 0;
+  if (goal !== 'maintain' && targetTimeWeeks > 0) {
+    dailyCalorieChange = (weightDiff * 7700) / (targetTimeWeeks * 7);
+  }
+
+  let targetCalories = tdee;
+  if (goal === 'lose') {
+    targetCalories = tdee - dailyCalorieChange;
+  } else if (goal === 'gain') {
+    targetCalories = tdee + dailyCalorieChange;
+  }
+
+  // Safe boundaries
+  targetCalories = Math.max(1200, Math.min(Math.round(targetCalories), 5000));
+
+  const protein = Math.round((targetCalories * 0.25) / 4);
+  const carbs = Math.round((targetCalories * 0.50) / 4);
+  const fat = Math.round((targetCalories * 0.25) / 9);
+  const fiber = gender === 'male' ? 38 : 25;
 
   const profile = {
     gender,
@@ -449,11 +446,11 @@ function submitOnboarding() {
     activity,
     goal,
     targetTimeWeeks: goal === 'maintain' ? 0 : targetTimeWeeks,
-    targetCalories: targets.targetCalories,
-    targetProtein: targets.targetProtein,
-    targetCarbs: targets.targetCarbs,
-    targetFat: targets.targetFat,
-    targetFiber: targets.targetFiber,
+    targetCalories,
+    targetProtein: protein,
+    targetCarbs: carbs,
+    targetFat: fat,
+    targetFiber: fiber,
     setupComplete: true
   };
 
@@ -486,12 +483,25 @@ function renderDashboard() {
   if (profile.goal !== 'maintain' && (!profile.targetTimeWeeks || profile.targetTimeWeeks <= 0)) {
     profile.targetTimeWeeks = 12; // default 12 weeks
     const age = calculateAge(profile.dob);
-    const targets = calculateTargets(profile.currentWeight, profile.height, age, profile.gender, profile.activity, profile.goal, profile.targetWeight, profile.targetTimeWeeks);
-    profile.targetCalories = targets.targetCalories;
-    profile.targetProtein = targets.targetProtein;
-    profile.targetCarbs = targets.targetCarbs;
-    profile.targetFat = targets.targetFat;
-    profile.targetFiber = targets.targetFiber;
+    let bmr = profile.gender === 'male'
+      ? (10 * profile.currentWeight + 6.25 * profile.height - 5 * age + 5)
+      : (10 * profile.currentWeight + 6.25 * profile.height - 5 * age - 161);
+    const tdee = Math.round(bmr * profile.activity);
+    const weightDiff = Math.abs(profile.currentWeight - profile.targetWeight);
+    const dailyCalorieChange = (weightDiff * 7700) / (profile.targetTimeWeeks * 7);
+
+    let targetCalories = tdee;
+    if (profile.goal === 'lose') {
+      targetCalories = tdee - dailyCalorieChange;
+    } else if (profile.goal === 'gain') {
+      targetCalories = tdee + dailyCalorieChange;
+    }
+
+    profile.targetCalories = Math.max(1200, Math.min(Math.round(targetCalories), 5000));
+    profile.targetProtein = Math.round((profile.targetCalories * 0.25) / 4);
+    profile.targetCarbs = Math.round((profile.targetCalories * 0.50) / 4);
+    profile.targetFat = Math.round((profile.targetCalories * 0.25) / 9);
+    profile.targetFiber = profile.gender === 'male' ? 38 : 25;
 
     localStorage.setItem('nt_profile_' + currentUser, JSON.stringify(profile));
   }
@@ -1079,7 +1089,32 @@ function saveProfileSettings() {
   }
 
   const age = calculateAge(dob);
-  const targets = calculateTargets(weight, height, age, gender, activity, goal, targetWeight, targetTimeWeeks);
+  let bmr = gender === 'male'
+    ? (10 * weight + 6.25 * height - 5 * age + 5)
+    : (10 * weight + 6.25 * height - 5 * age - 161);
+
+  const tdee = Math.round(bmr * activity);
+
+  const weightDiff = Math.abs(weight - targetWeight);
+  let dailyCalorieChange = 0;
+  if (goal !== 'maintain' && targetTimeWeeks > 0) {
+    dailyCalorieChange = (weightDiff * 7700) / (targetTimeWeeks * 7);
+  }
+
+  let targetCalories = tdee;
+  if (goal === 'lose') {
+    targetCalories = tdee - dailyCalorieChange;
+  } else if (goal === 'gain') {
+    targetCalories = tdee + dailyCalorieChange;
+  }
+
+  // Safe boundaries
+  targetCalories = Math.max(1200, Math.min(Math.round(targetCalories), 5000));
+
+  const protein = Math.round((targetCalories * 0.25) / 4);
+  const carbs = Math.round((targetCalories * 0.50) / 4);
+  const fat = Math.round((targetCalories * 0.25) / 9);
+  const fiber = gender === 'male' ? 38 : 25;
 
   const oldProfile = JSON.parse(localStorage.getItem('nt_profile_' + currentUser) || '{}');
   const newProfile = {
@@ -1092,11 +1127,11 @@ function saveProfileSettings() {
     activity,
     goal,
     targetTimeWeeks: goal === 'maintain' ? 0 : targetTimeWeeks,
-    targetCalories: targets.targetCalories,
-    targetProtein: targets.targetProtein,
-    targetCarbs: targets.targetCarbs,
-    targetFat: targets.targetFat,
-    targetFiber: targets.targetFiber
+    targetCalories,
+    targetProtein: protein,
+    targetCarbs: carbs,
+    targetFat: fat,
+    targetFiber: fiber
   };
 
   localStorage.setItem('nt_profile_' + currentUser, JSON.stringify(newProfile));
