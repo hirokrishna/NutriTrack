@@ -263,12 +263,29 @@ function calculateBMI() {
   document.getElementById('res-target').textContent = target;
   document.getElementById('res-ibw').textContent = ibw;
   
-  const protein = Math.round(target * 0.25 / 4), carbs = Math.round(target * 0.50 / 4), fat = Math.round(target * 0.25 / 9);
-  
+  let proteinPerKg = 1.5;
+  if (goal === 'gain') proteinPerKg = 2.2;
+  if (goal === 'lose') proteinPerKg = 2.2;
+  const protein = Math.round(weight * proteinPerKg);
+  const proteinCals = protein * 4;
+
+  let fatPercent = 0.25;
+  if (goal === 'maintain') fatPercent = 0.28;
+  const fat = Math.round((target * fatPercent) / 9);
+  const fatCals = fat * 9;
+
+  let remainingCals = target - proteinCals - fatCals;
+  if (remainingCals < 0) remainingCals = 0;
+  const carbs = Math.round(remainingCals / 4);
+
+  const protPct = Math.round((proteinCals / target) * 100) || 25;
+  const fatPct = Math.round((fatCals / target) * 100) || 25;
+  const carbPct = Math.round((remainingCals / target) * 100) || 50;
+
   document.getElementById('macro-bars').innerHTML =
-    '<div class="macro-bar"><span class="macro-bar-label">Protein</span><div class="macro-bar-track"><div class="macro-bar-fill" style="width:25%;background:#A8C8A8"></div></div><span class="macro-bar-val">' + protein + 'g/day</span></div>' +
-    '<div class="macro-bar"><span class="macro-bar-label">Carbs</span><div class="macro-bar-track"><div class="macro-bar-fill" style="width:50%;background:#F5C842"></div></div><span class="macro-bar-val">' + carbs + 'g/day</span></div>' +
-    '<div class="macro-bar"><span class="macro-bar-label">Fat</span><div class="macro-bar-track"><div class="macro-bar-fill" style="width:25%;background:#E8A080"></div></div><span class="macro-bar-val">' + fat + 'g/day</span></div>';
+    '<div class="macro-bar"><span class="macro-bar-label">Protein</span><div class="macro-bar-track"><div class="macro-bar-fill" style="width:' + protPct + '%;background:#A8C8A8"></div></div><span class="macro-bar-val">' + protein + 'g/day</span></div>' +
+    '<div class="macro-bar"><span class="macro-bar-label">Carbs</span><div class="macro-bar-track"><div class="macro-bar-fill" style="width:' + carbPct + '%;background:#F5C842"></div></div><span class="macro-bar-val">' + carbs + 'g/day</span></div>' +
+    '<div class="macro-bar"><span class="macro-bar-label">Fat</span><div class="macro-bar-track"><div class="macro-bar-fill" style="width:' + fatPct + '%;background:#E8A080"></div></div><span class="macro-bar-val">' + fat + 'g/day</span></div>';
 }
 
 // ══ NOTES ══
